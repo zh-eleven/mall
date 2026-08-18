@@ -179,12 +179,56 @@ public enum ErrorCode implements IErrorCode {
             "请先安全移除超级管理员角色",
             HttpStatus.CONFLICT
     ),
-
+    BRAND_NOT_FOUND(
+            40406,
+            "品牌不存在",
+            HttpStatus.NOT_FOUND
+    ),
+    CATEGORY_NOT_FOUND(
+            40407,
+            "商品分类不存在",
+            HttpStatus.NOT_FOUND
+    ),
+    CATEGORY_HAS_CHILDREN(
+            40915,
+            "该分类包含子分类，请先删除子分类",
+            HttpStatus.CONFLICT
+    ),
+    CATEGORY_MOVE_NOT_ALLOWED(
+            40914,
+            "该分类包含子分类，不能移动到其他分类下",
+            HttpStatus.CONFLICT
+    ),
+    CATEGORY_NAME_ALREADY_EXISTS(
+            40913,
+            "同级分类名称已存在",
+            HttpStatus.CONFLICT
+    ),
+    CATEGORY_PARENT_INVALID(
+            40010,
+            "父分类无效，只允许两级分类",
+            HttpStatus.BAD_REQUEST
+    ),
     LAST_SUPER_ADMIN_PROTECTED(
             40911,
             "系统必须保留至少一位启用的超级管理员",
             HttpStatus.CONFLICT
-    ),;
+    ),
+    BRAND_NAME_ALREADY_EXISTS(
+            40912,
+            "品牌名称已存在",
+            HttpStatus.CONFLICT
+    ),
+    BRAND_HAS_PRODUCTS(
+            40916,
+            "该品牌存在关联商品，无法删除",
+            HttpStatus.CONFLICT
+    ),
+    CATEGORY_HAS_PRODUCTS(
+            40917,
+            "该分类存在关联商品，无法删除",
+            HttpStatus.CONFLICT
+    );
 
     private final int code;
     private final String message;
