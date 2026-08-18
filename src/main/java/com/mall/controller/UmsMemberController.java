@@ -3,6 +3,8 @@ package com.mall.controller;
 import com.mall.common.api.ApiResult;
 import com.mall.domain.dto.MemberLoginDTO;
 import com.mall.domain.dto.MemberRegisterDTO;
+import com.mall.domain.dto.MemberUpdateDTO;
+import com.mall.domain.dto.MemberUpdatePasswordDTO;
 import com.mall.domain.entity.UmsMember;
 import com.mall.domain.vo.MemberInfoVO;
 import com.mall.domain.vo.MemberLoginVO;
@@ -44,6 +46,39 @@ public class UmsMemberController {
 
         return ApiResult.success(
                 MemberInfoVO.from(memberDetails.getMember())
+        );
+    }
+
+    @PatchMapping("/me")
+    public ApiResult<MemberInfoVO> updateProfile(
+            @AuthenticationPrincipal MemberDetails memberDetails,
+            @Valid @RequestBody MemberUpdateDTO dto) {
+
+        Long memberId = memberDetails.getMember().getId();
+
+        MemberInfoVO result = memberService.updateProfile(
+                memberId,
+                dto
+        );
+
+        return ApiResult.success(
+                result,
+                "个人资料修改成功"
+        );
+    }
+
+    @PatchMapping("/me/password")
+    public ApiResult<Void> updatePassword(
+            @AuthenticationPrincipal MemberDetails memberDetails,
+            @Valid @RequestBody MemberUpdatePasswordDTO dto) {
+
+        Long memberId = memberDetails.getMember().getId();
+
+        memberService.updatePassword(memberId, dto);
+
+        return ApiResult.success(
+                null,
+                "密码修改成功"
         );
     }
 }

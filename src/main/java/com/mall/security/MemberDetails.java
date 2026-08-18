@@ -17,6 +17,8 @@ public class MemberDetails implements UserDetails {
         this.member = member;
     }
 
+
+
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
         // 用户权限后面 RBAC 再做
@@ -35,6 +37,6 @@ public class MemberDetails implements UserDetails {
 
     @Override
     public boolean isEnabled() {
-        return member.getStatus() == 1;
+        return Integer.valueOf(1).equals(member.getStatus());
     }
 }

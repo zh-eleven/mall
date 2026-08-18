@@ -76,6 +76,23 @@ public enum ErrorCode implements IErrorCode {
             50000,
             "服务器内部错误",
             HttpStatus.INTERNAL_SERVER_ERROR
+    ),
+    OLD_PASSWORD_ERROR(
+            40002,
+            "原密码错误",
+            HttpStatus.BAD_REQUEST
+    ),
+
+    PASSWORD_CONFIRM_NOT_MATCH(
+            40003,
+            "两次输入的新密码不一致",
+            HttpStatus.BAD_REQUEST
+    ),
+
+    NEW_PASSWORD_SAME_AS_OLD(
+            40004,
+            "新密码不能与原密码相同",
+            HttpStatus.BAD_REQUEST
     );
 
     private final int code;
