@@ -1,5 +1,6 @@
 package com.mall.security;
 
+import com.mall.common.enums.PrincipalType;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -8,6 +9,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
@@ -15,10 +17,14 @@ import java.io.IOException;
 
 @Component
 @RequiredArgsConstructor
-public class JwtAuthenticationFilter extends OncePerRequestFilter {
+public class JwtAuthenticationFilter
+        extends OncePerRequestFilter {
 
     private final JwtTokenService jwtTokenService;
+
     private final MemberDetailsService memberDetailsService;
+
+    private final AdminDetailsService adminDetailsService;
 
     @Override
     protected void doFilterInternal(
@@ -27,11 +33,11 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             FilterChain filterChain)
             throws ServletException, IOException {
 
-        String authorization = request.getHeader("Authorization");
+        String authorization =
+                request.getHeader("Authorization");
 
-        // 没带 Bearer Token，直接继续
-        if (authorization == null ||
-                !authorization.startsWith("Bearer ")) {
+        if (authorization == null
+                || !authorization.startsWith("Bearer ")) {
 
             filterChain.doFilter(request, response);
             return;
@@ -39,36 +45,62 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
         String token = authorization.substring(7);
 
-        // Token 无效
         if (!jwtTokenService.validateToken(token)) {
             filterChain.doFilter(request, response);
             return;
         }
 
-        String username = jwtTokenService.getUsername(token);
+        if (SecurityContextHolder.getContext()
+                .getAuthentication() == null) {
 
-        // 当前请求还没有认证
-        if (username != null &&
-                SecurityContextHolder.getContext()
-                        .getAuthentication() == null) {
+            try {
+                String username =
+                        jwtTokenService.getUsername(token);
 
-            UserDetails userDetails =
-                    memberDetailsService.loadUserByUsername(username);
+                PrincipalType principalType =
+                        jwtTokenService
+                                .getPrincipalType(token);
 
-            if (userDetails.isEnabled()) {
-
-                UsernamePasswordAuthenticationToken authentication =
-                        new UsernamePasswordAuthenticationToken(
-                                userDetails,
-                                null,
-                                userDetails.getAuthorities()
+                UserDetails userDetails =
+                        loadUserDetails(
+                                username,
+                                principalType
                         );
 
-                SecurityContextHolder.getContext()
-                        .setAuthentication(authentication);
+                if (userDetails.isEnabled()) {
+                    UsernamePasswordAuthenticationToken
+                            authentication =
+                            new UsernamePasswordAuthenticationToken(
+                                    userDetails,
+                                    null,
+                                    userDetails.getAuthorities()
+                            );
+
+                    SecurityContextHolder.getContext()
+                            .setAuthentication(authentication);
+                }
+
+            } catch (UsernameNotFoundException exception) {
+                // Token 中的用户已被删除，
+                // 保持未认证状态，由 Security 返回 401
             }
         }
 
         filterChain.doFilter(request, response);
+    }
+
+    private UserDetails loadUserDetails(
+            String username,
+            PrincipalType principalType) {
+
+        return switch (principalType) {
+            case MEMBER ->
+                    memberDetailsService
+                            .loadUserByUsername(username);
+
+            case ADMIN ->
+                    adminDetailsService
+                            .loadUserByUsername(username);
+        };
     }
 }

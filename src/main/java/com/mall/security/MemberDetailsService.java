@@ -1,8 +1,8 @@
 package com.mall.security;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.mall.domain.entity.UmsMember;
-import com.mall.mapper.UmsMemberMapper;
+import com.mall.member.entity.UmsMember;
+import com.mall.member.mapper.UmsMemberMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;

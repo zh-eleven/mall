@@ -7,6 +7,7 @@ public final class SecurityConstants {
 
     public static final String[] WHITE_LIST = {
             "/api/members/register",
-            "/api/members/login"
+            "/api/members/login",
+            "/api/admin/auth/login"
     };
 }

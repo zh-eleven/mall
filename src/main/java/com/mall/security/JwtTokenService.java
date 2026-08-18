@@ -1,6 +1,9 @@
 package com.mall.security;
 
-import com.mall.domain.entity.UmsMember;
+import com.mall.common.enums.PrincipalType;
+import com.mall.admin.entity.UmsAdmin;
+import com.mall.member.entity.UmsMember;
+import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.io.Decoders;
 import io.jsonwebtoken.security.Keys;
@@ -26,47 +29,88 @@ public class JwtTokenService {
     }
 
     public String generateToken(UmsMember member) {
+        return generateToken(
+                member.getUsername(),
+                member.getId(),
+                PrincipalType.MEMBER
+        );
+    }
+
+    public String generateToken(UmsAdmin admin) {
+        return generateToken(
+                admin.getUsername(),
+                admin.getId(),
+                PrincipalType.ADMIN
+        );
+    }
+
+    private String generateToken(
+            String username,
+            Long userId,
+            PrincipalType principalType) {
 
         Instant now = Instant.now();
 
         return Jwts.builder()
-
-                // 原 mall 项目也是把 username 放进 sub
-                .subject(member.getUsername())
-
-                // 额外保存 userId
-                .claim("userId", member.getId())
-
-                .issuedAt(Date.from(now))
-
-                .expiration(
-                        Date.from(now.plusSeconds(expiration))
+                .subject(username)
+                .claim("userId", userId)
+                .claim(
+                        "principalType",
+                        principalType.name()
                 )
-
+                .issuedAt(Date.from(now))
+                .expiration(
+                        Date.from(
+                                now.plusSeconds(expiration)
+                        )
+                )
                 .signWith(getSigningKey())
-
                 .compact();
     }
 
     public String getUsername(String token) {
-        return Jwts.parser()
-                .verifyWith(getSigningKey())
-                .build()
-                .parseSignedClaims(token)
-                .getPayload()
-                .getSubject();
+        return getClaims(token).getSubject();
+    }
+
+    public Long getUserId(String token) {
+        Number userId = getClaims(token)
+                .get("userId", Number.class);
+
+        return userId.longValue();
+    }
+
+    public PrincipalType getPrincipalType(String token) {
+        String value = getClaims(token)
+                .get("principalType", String.class);
+
+        return PrincipalType.valueOf(value);
     }
 
     public boolean validateToken(String token) {
         try {
-            Jwts.parser()
-                    .verifyWith(getSigningKey())
-                    .build()
-                    .parseSignedClaims(token);
+            Claims claims = getClaims(token);
 
-            return true;
-        } catch (Exception e) {
+            String principalType =
+                    claims.get(
+                            "principalType",
+                            String.class
+                    );
+
+            return PrincipalType.MEMBER.name()
+                    .equals(principalType)
+                    || PrincipalType.ADMIN.name()
+                    .equals(principalType);
+
+        } catch (Exception exception) {
             return false;
         }
+    }
+
+    private Claims getClaims(String token) {
+        return Jwts.parser()
+                .verifyWith(getSigningKey())
+                .build()
+                .parseSignedClaims(token)
+                .getPayload();
     }
 }
