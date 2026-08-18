@@ -1,0 +1,49 @@
+# Maven build output
+target/
+
+# IntelliJ IDEA
+.idea/
+*.iws
+*.iml
+*.ipr
+out/
+
+# Eclipse / Spring Tool Suite
+.classpath
+.project
+.settings/
+.springBeans
+.sts4-cache/
+
+# Visual Studio Code
+.vscode/
+
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+application-local.yml
+application-local.yaml
+src/main/resources/application-local.yml
+src/main/resources/application-local.yaml
+
+# Logs and runtime files
+logs/
+*.log
+*.pid
+hs_err_pid*
+replay_pid*
+
+# Compiled files
+*.class
+
+# Operating system files
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Temporary files
+*.tmp
+*.swp
+*.swo
+*~
