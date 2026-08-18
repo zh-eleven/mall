@@ -48,6 +48,12 @@ public enum ErrorCode implements IErrorCode {
             HttpStatus.NOT_FOUND
     ),
 
+    ADDRESS_NOT_FOUND(
+            40402,
+            "收货地址不存在",
+            HttpStatus.NOT_FOUND
+    ),
+
     DATA_CONFLICT(
             40900,
             "数据冲突",
