@@ -115,6 +115,14 @@ class GlobalExceptionHandlerTest {
     }
 
     @Test
+    void unknownEndpointShouldReturnStable404Response() throws Exception {
+        mockMvc.perform(get("/api/path-that-does-not-exist"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value(40410))
+                .andExpect(jsonPath("$.message").value("接口不存在"));
+    }
+
+    @Test
     void duplicateNameShouldReturn409() throws Exception {
         mockMvc.perform(get("/test/duplicate"))
                 .andExpect(status().isConflict())

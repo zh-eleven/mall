@@ -14,6 +14,7 @@ import com.mall.product.service.PmsBrandService;
 import com.mall.product.vo.BrandVO;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
@@ -97,7 +98,7 @@ public class PmsBrandServiceImpl implements PmsBrandService {
 
         try {
             brandMapper.insert(brand);
-        } catch (DataIntegrityViolationException exception) {
+        } catch (DuplicateKeyException exception) {
             throw new BusinessException(
                     ErrorCode.BRAND_NAME_ALREADY_EXISTS,
                     exception
@@ -201,7 +202,7 @@ public class PmsBrandServiceImpl implements PmsBrandService {
         if (hasUpdate) {
             try {
                 brandMapper.update(null, wrapper);
-            } catch (DataIntegrityViolationException exception) {
+            } catch (DuplicateKeyException exception) {
                 throw new BusinessException(
                         ErrorCode.BRAND_NAME_ALREADY_EXISTS,
                         exception

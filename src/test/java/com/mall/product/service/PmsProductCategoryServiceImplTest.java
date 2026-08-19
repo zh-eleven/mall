@@ -15,6 +15,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.DuplicateKeyException;
 
 import java.util.List;
 
@@ -449,7 +450,7 @@ class PmsProductCategoryServiceImplTest {
         ProductCategoryCreateDTO dto = createDto(0L, "手机");
         when(categoryMapper.selectCount(any())).thenReturn(0L);
         when(categoryMapper.insert(any(PmsProductCategory.class)))
-                .thenThrow(new DataIntegrityViolationException(
+                .thenThrow(new DuplicateKeyException(
                         "duplicate key SQL detail"
                 ));
 

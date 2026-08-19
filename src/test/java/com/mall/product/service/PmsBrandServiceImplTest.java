@@ -13,6 +13,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.DuplicateKeyException;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -119,7 +120,7 @@ class PmsBrandServiceImplTest {
         when(brandMapper.selectCount(any()))
                 .thenReturn(0L);
         when(brandMapper.insert(any(PmsBrand.class)))
-                .thenThrow(new DataIntegrityViolationException(
+                .thenThrow(new DuplicateKeyException(
                         "duplicate key SQL detail"
                 ));
 

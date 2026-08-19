@@ -11,6 +11,7 @@ import com.mall.product.service.PmsProductCategoryService;
 import com.mall.product.vo.ProductCategoryTreeVO;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -124,7 +125,7 @@ public class PmsProductCategoryServiceImpl
 
         try {
             categoryMapper.insert(category);
-        } catch (DataIntegrityViolationException exception) {
+        } catch (DuplicateKeyException exception) {
             throw new BusinessException(
                     ErrorCode.CATEGORY_NAME_ALREADY_EXISTS,
                     exception
@@ -261,7 +262,7 @@ public class PmsProductCategoryServiceImpl
 
         try {
             categoryMapper.updateById(category);
-        } catch (DataIntegrityViolationException exception) {
+        } catch (DuplicateKeyException exception) {
             throw new BusinessException(
                     ErrorCode.CATEGORY_NAME_ALREADY_EXISTS,
                     exception

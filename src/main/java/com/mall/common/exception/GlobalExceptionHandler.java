@@ -17,7 +17,8 @@ import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
-
+import org.springframework.web.servlet.NoHandlerFoundException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 import java.util.Comparator;
 import java.util.Objects;
 import java.util.stream.Collectors;
@@ -25,7 +26,23 @@ import java.util.stream.Collectors;
 @Slf4j
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+    @ExceptionHandler(NoResourceFoundException.class)
+    public ResponseEntity<ApiResult<Void>> handleNoResourceFound(
+            NoResourceFoundException exception) {
 
+        log.debug("接口不存在: {}", exception.getResourcePath());
+
+        return failed(ErrorCode.ENDPOINT_NOT_FOUND);
+    }
+
+    @ExceptionHandler(NoHandlerFoundException.class)
+    public ResponseEntity<ApiResult<Void>> handleNoHandlerFound(
+            NoHandlerFoundException exception) {
+
+        log.debug("接口不存在: {}", exception.getRequestURL());
+
+        return failed(ErrorCode.ENDPOINT_NOT_FOUND);
+    }
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ApiResult<Void>> handleValidationException(
             MethodArgumentNotValidException exception) {

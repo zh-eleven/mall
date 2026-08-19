@@ -228,7 +228,84 @@ public enum ErrorCode implements IErrorCode {
             40917,
             "该分类存在关联商品，无法删除",
             HttpStatus.CONFLICT
+    ),
+    ATTRIBUTE_CATEGORY_NOT_FOUND(
+            40408,
+            "商品属性分类不存在",
+            HttpStatus.NOT_FOUND
+    ),
+    ATTRIBUTE_CATEGORY_NAME_ALREADY_EXISTS(
+            40918,
+            "商品属性分类名称已存在",
+            HttpStatus.CONFLICT
+    ),
+    ATTRIBUTE_CATEGORY_HAS_ATTRIBUTES(
+            40919,
+            "该分类存在商品属性，无法删除",
+            HttpStatus.CONFLICT
+    ),
+    ATTRIBUTE_NOT_FOUND(
+            40409,
+            "商品属性不存在",
+            HttpStatus.NOT_FOUND
+    ),
+    ATTRIBUTE_INPUT_LIST_REQUIRED(
+            40011,
+            "列表录入方式必须提供可选值",
+            HttpStatus.BAD_REQUEST
+    ),
+    ATTRIBUTE_NAME_ALREADY_EXISTS(
+            40920,
+            "同一分类下已存在同类型同名属性",
+            HttpStatus.CONFLICT
+    ),
+    ATTRIBUTE_HAS_RELATIONS(
+            40921,
+            "该属性已被使用，无法删除",
+            HttpStatus.CONFLICT
+    ),
+    CATEGORY_ATTRIBUTE_ONLY_LEAF_ALLOWED(
+            40012,
+            "只能为二级商品分类设置属性",
+            HttpStatus.BAD_REQUEST
+    ),
+    ATTRIBUTE_SELECTION_INVALID(
+            40013,
+            "属性列表中包含不存在的商品属性",
+            HttpStatus.BAD_REQUEST
+    ),
+    ENDPOINT_NOT_FOUND(
+            40410,
+            "接口不存在",
+            HttpStatus.NOT_FOUND
+    ),
+    PRODUCT_NOT_FOUND(
+            40411,
+            "商品不存在",
+            HttpStatus.NOT_FOUND
+    ),
+    PRODUCT_CATEGORY_INVALID(
+            40014,
+            "商品只能归属二级商品分类",
+            HttpStatus.BAD_REQUEST
+    ),
+    PRODUCT_PRICE_INVALID(
+            40015,
+            "市场价格不能低于销售价格",
+            HttpStatus.BAD_REQUEST
+    ),
+    PRODUCT_SN_ALREADY_EXISTS(
+            40922,
+            "商品货号已存在",
+            HttpStatus.CONFLICT
+    ),
+    PRODUCT_PUBLISHED_DELETE_FORBIDDEN(
+            40923,
+            "已上架商品不能删除，请先下架",
+            HttpStatus.CONFLICT
     );
+
+
 
     private final int code;
     private final String message;

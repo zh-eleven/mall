@@ -1,0 +1,7 @@
+spring:
+  datasource:
+    username: test
+    password: test
+
+jwt:
+  secret: dGVzdC1vbmx5LWp3dC1zZWNyZXQtZm9yLXVuaXQtdGVzdHM=
