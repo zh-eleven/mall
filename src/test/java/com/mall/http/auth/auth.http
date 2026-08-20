@@ -1,0 +1,578 @@
+### Mall 商品属性值与 SKU 接口测试
+### 使用方法：
+### 1. 启动 mall 项目。
+### 2. 将 adminPassword 改成你的管理员密码。
+### 3. 从上到下依次点击每个请求左侧的运行按钮。
+### 4. 登录成功后会自动保存 adminToken；创建商品后会自动保存 productId。
+
+@baseUrl = http://localhost:8080
+@adminUsername = admin
+@adminPassword = 123456
+
+### 1. 管理员登录并自动保存 Token
+# @name adminLogin
+POST {{baseUrl}}/api/admin/auth/login
+Content-Type: application/json
+
+{
+  "username": "{{adminUsername}}",
+  "password": {{adminPassword}}
+}
+
+> {%
+    client.test("管理员登录成功", function () {
+        client.assert(response.status === 200, "预期 HTTP 200，实际为 " + response.status);
+        client.assert(response.body.data && response.body.data.token, "响应中缺少 data.token");
+    });
+
+    if (response.body.data && response.body.data.token) {
+        client.global.set("adminToken", response.body.data.token);
+    }
+%}
+
+### 2. 创建下架商品并自动保存 productId
+# @name createProduct
+POST {{baseUrl}}/api/admin/products
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "brandId": 3,
+  "productCategoryId": 3,
+  "name": "华为测试手机",
+  "subTitle": "SKU功能测试商品",
+  "productSn": "HUAWEI-{{$uuid}}",
+  "price": 4999.00,
+  "originalPrice": 5999.00,
+  "stock": 0,
+  "lowStock": 2,
+  "unit": "部",
+  "publishStatus": 0
+}
+
+> {%
+    client.test("商品创建成功", function () {
+        client.assert(response.status === 200, "预期 HTTP 200，实际为 " + response.status);
+        client.assert(response.body.data && response.body.data.id, "响应中缺少 data.id");
+        client.assert(response.body.data.publishStatus === 0, "新商品应该处于下架状态");
+    });
+
+    if (response.body.data && response.body.data.id) {
+        client.global.set("productId", response.body.data.id);
+    }
+%}
+
+### 3. 查询分类 3 已关联的属性
+# @name listCategoryAttributes
+GET {{baseUrl}}/api/admin/product-categories/3/attributes
+Authorization: Bearer {{adminToken}}
+
+> {%
+    client.test("分类属性查询成功", function () {
+        client.assert(response.status === 200, "预期 HTTP 200，实际为 " + response.status);
+        const ids = response.body.data.map(item => item.id);
+        client.assert(ids.includes(2), "缺少处理器型号属性 ID=2");
+        client.assert(ids.includes(3), "缺少颜色属性 ID=3");
+    });
+%}
+
+### 4. 设置商品属性值：处理器参数 + 颜色规格
+# @name replaceProductAttributeValues
+PUT {{baseUrl}}/api/admin/products/{{productId}}/attribute-values
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "values": [
+    {
+      "productAttributeId": 2,
+      "value": "麒麟9000S"
+    },
+    {
+      "productAttributeId": 3,
+      "value": "黑色,白色"
+    }
+  ]
+}
+
+> {%
+    client.test("商品属性值设置成功", function () {
+        client.assert(response.status === 200, "预期 HTTP 200，实际为 " + response.status);
+        client.assert(response.body.data.length === 2, "预期返回 2 条商品属性值");
+    });
+%}
+
+### 5. 查询商品属性值
+# @name listProductAttributeValues
+GET {{baseUrl}}/api/admin/products/{{productId}}/attribute-values
+Authorization: Bearer {{adminToken}}
+
+> {%
+    client.test("商品属性值查询正确", function () {
+        client.assert(response.status === 200, "预期 HTTP 200，实际为 " + response.status);
+        client.assert(response.body.data.length === 2, "预期查询到 2 条属性值");
+    });
+%}
+
+### 6. 整体替换：仅保留颜色
+# @name replaceWithColorOnly
+PUT {{baseUrl}}/api/admin/products/{{productId}}/attribute-values
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "values": [
+    {
+      "productAttributeId": 3,
+      "value": "黑色,白色"
+    }
+  ]
+}
+
+> {%
+    client.test("属性值整体替换成功", function () {
+        client.assert(response.status === 200, "预期 HTTP 200，实际为 " + response.status);
+        client.assert(response.body.data.length === 1, "替换后应只剩 1 条属性值");
+        client.assert(response.body.data[0].productAttributeId === 3, "保留的应该是颜色属性");
+    });
+%}
+
+### 7. 清空全部商品属性值
+# @name clearProductAttributeValues
+PUT {{baseUrl}}/api/admin/products/{{productId}}/attribute-values
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "values": []
+}
+
+> {%
+    client.test("商品属性值清空成功", function () {
+        client.assert(response.status === 200, "预期 HTTP 200，实际为 " + response.status);
+        client.assert(response.body.data.length === 0, "清空后应该返回空数组");
+    });
+%}
+
+### 8. 恢复商品属性值，供 SKU 测试使用
+# @name restoreProductAttributeValues
+PUT {{baseUrl}}/api/admin/products/{{productId}}/attribute-values
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "values": [
+    {
+      "productAttributeId": 2,
+      "value": "麒麟9000S"
+    },
+    {
+      "productAttributeId": 3,
+      "value": "黑色,白色"
+    }
+  ]
+}
+
+> {%
+    client.test("商品属性值恢复成功", function () {
+        client.assert(response.status === 200, "预期 HTTP 200，实际为 " + response.status);
+        client.assert(response.body.data.length === 2, "应该恢复 2 条属性值");
+    });
+%}
+
+### 9. 重复属性 ID，应返回 400
+# @name duplicateProductAttribute
+PUT {{baseUrl}}/api/admin/products/{{productId}}/attribute-values
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "values": [
+    {
+      "productAttributeId": 3,
+      "value": "黑色"
+    },
+    {
+      "productAttributeId": 3,
+      "value": "白色"
+    }
+  ]
+}
+
+> {%
+    client.test("重复属性被拒绝", function () {
+        client.assert(response.status === 400, "预期 HTTP 400，实际为 " + response.status);
+    });
+%}
+
+### 10. 创建黑色和白色两个 SKU
+# @name replaceSkus
+PUT {{baseUrl}}/api/admin/products/{{productId}}/skus
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "skus": [
+    {
+      "skuCode": "HUAWEI-{{productId}}-BLACK",
+      "price": 4999.00,
+      "stock": 10,
+      "lowStock": 2,
+      "pic": null,
+      "specs": [
+        {
+          "productAttributeId": 3,
+          "value": "黑色"
+        }
+      ]
+    },
+    {
+      "skuCode": "HUAWEI-{{productId}}-WHITE",
+      "price": 5099.00,
+      "stock": 8,
+      "lowStock": 2,
+      "pic": null,
+      "specs": [
+        {
+          "productAttributeId": 3,
+          "value": "白色"
+        }
+      ]
+    }
+  ]
+}
+
+> {%
+    client.test("两个 SKU 创建成功", function () {
+        client.assert(response.status === 200, "预期 HTTP 200，实际为 " + response.status);
+        client.assert(response.body.data.length === 2, "预期返回 2 个 SKU");
+        const availableStock = response.body.data.reduce((sum, item) => sum + item.availableStock, 0);
+        client.assert(availableStock === 18, "SKU 可售库存合计应为 18");
+    });
+%}
+
+### 11. 查询 SKU
+# @name listSkus
+GET {{baseUrl}}/api/admin/products/{{productId}}/skus
+Authorization: Bearer {{adminToken}}
+
+> {%
+    client.test("SKU 查询正确", function () {
+        client.assert(response.status === 200, "预期 HTTP 200，实际为 " + response.status);
+        client.assert(response.body.data.length === 2, "预期查询到 2 个 SKU");
+        client.assert(response.body.data.every(item => item.lockedStock === 0), "初始锁定库存应该全部为 0");
+    });
+%}
+
+### 12. 查询商品汇总价格和库存
+# @name getProductAfterSku
+GET {{baseUrl}}/api/admin/products/{{productId}}
+Authorization: Bearer {{adminToken}}
+
+> {%
+    client.test("商品价格和库存同步正确", function () {
+        client.assert(response.status === 200, "预期 HTTP 200，实际为 " + response.status);
+        client.assert(Number(response.body.data.price) === 4999, "商品价格应同步为最低 SKU 价格 4999");
+        client.assert(response.body.data.stock === 18, "商品总库存应同步为 18");
+    });
+%}
+
+### 13. 参数属性不能生成 SKU，应返回 40016
+# @name invalidParameterAsSkuSpec
+PUT {{baseUrl}}/api/admin/products/{{productId}}/skus
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "skus": [
+    {
+      "skuCode": "INVALID-{{productId}}-PROCESSOR",
+      "price": 4999.00,
+      "stock": 10,
+      "lowStock": 2,
+      "pic": null,
+      "specs": [
+        {
+          "productAttributeId": 2,
+          "value": "麒麟9000S"
+        }
+      ]
+    }
+  ]
+}
+
+> {%
+    client.test("参数属性生成 SKU 被拒绝", function () {
+        client.assert(response.status === 400, "预期 HTTP 400，实际为 " + response.status);
+        client.assert(response.body.code === 40016, "预期业务错误码 40016");
+    });
+%}
+
+### 14. 商品未选择蓝色，蓝色 SKU 应返回 40016
+# @name invalidUnselectedColor
+PUT {{baseUrl}}/api/admin/products/{{productId}}/skus
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "skus": [
+    {
+      "skuCode": "INVALID-{{productId}}-BLUE",
+      "price": 4999.00,
+      "stock": 10,
+      "lowStock": 2,
+      "pic": null,
+      "specs": [
+        {
+          "productAttributeId": 3,
+          "value": "蓝色"
+        }
+      ]
+    }
+  ]
+}
+
+> {%
+    client.test("未选择的颜色被拒绝", function () {
+        client.assert(response.status === 400, "预期 HTTP 400，实际为 " + response.status);
+        client.assert(response.body.code === 40016, "预期业务错误码 40016");
+    });
+%}
+
+### 15. 两个 SKU 编码相同，应返回 40924
+# @name duplicateSkuCode
+PUT {{baseUrl}}/api/admin/products/{{productId}}/skus
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "skus": [
+    {
+      "skuCode": "DUPLICATE-{{productId}}",
+      "price": 4999.00,
+      "stock": 10,
+      "lowStock": 2,
+      "pic": null,
+      "specs": [
+        {
+          "productAttributeId": 3,
+          "value": "黑色"
+        }
+      ]
+    },
+    {
+      "skuCode": "DUPLICATE-{{productId}}",
+      "price": 5099.00,
+      "stock": 8,
+      "lowStock": 2,
+      "pic": null,
+      "specs": [
+        {
+          "productAttributeId": 3,
+          "value": "白色"
+        }
+      ]
+    }
+  ]
+}
+
+> {%
+    client.test("重复 SKU 编码被拒绝", function () {
+        client.assert(response.status === 409, "预期 HTTP 409，实际为 " + response.status);
+        client.assert(response.body.code === 40924, "预期业务错误码 40924");
+    });
+%}
+
+### 16. 两个 SKU 规格相同，应返回 40925
+# @name duplicateSkuSpec
+PUT {{baseUrl}}/api/admin/products/{{productId}}/skus
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "skus": [
+    {
+      "skuCode": "SPEC-{{productId}}-A",
+      "price": 4999.00,
+      "stock": 10,
+      "lowStock": 2,
+      "pic": null,
+      "specs": [
+        {
+          "productAttributeId": 3,
+          "value": "黑色"
+        }
+      ]
+    },
+    {
+      "skuCode": "SPEC-{{productId}}-B",
+      "price": 5099.00,
+      "stock": 8,
+      "lowStock": 2,
+      "pic": null,
+      "specs": [
+        {
+          "productAttributeId": 3,
+          "value": "黑色"
+        }
+      ]
+    }
+  ]
+}
+
+> {%
+    client.test("重复 SKU 规格组合被拒绝", function () {
+        client.assert(response.status === 409, "预期 HTTP 409，实际为 " + response.status);
+        client.assert(response.body.code === 40925, "预期业务错误码 40925");
+    });
+%}
+
+### 17. 库存为负数，应参数校验失败
+# @name negativeStock
+PUT {{baseUrl}}/api/admin/products/{{productId}}/skus
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "skus": [
+    {
+      "skuCode": "INVALID-{{productId}}-STOCK",
+      "price": 4999.00,
+      "stock": -1,
+      "lowStock": 2,
+      "pic": null,
+      "specs": [
+        {
+          "productAttributeId": 3,
+          "value": "黑色"
+        }
+      ]
+    }
+  ]
+}
+
+> {%
+    client.test("负库存被参数校验拒绝", function () {
+        client.assert(response.status === 400, "预期 HTTP 400，实际为 " + response.status);
+        client.assert(response.body.code === 40001, "预期参数校验错误码 40001");
+    });
+%}
+
+### 18. 价格为负数，应参数校验失败
+# @name negativePrice
+PUT {{baseUrl}}/api/admin/products/{{productId}}/skus
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "skus": [
+    {
+      "skuCode": "INVALID-{{productId}}-PRICE",
+      "price": -1.00,
+      "stock": 10,
+      "lowStock": 2,
+      "pic": null,
+      "specs": [
+        {
+          "productAttributeId": 3,
+          "value": "黑色"
+        }
+      ]
+    }
+  ]
+}
+
+> {%
+    client.test("负价格被参数校验拒绝", function () {
+        client.assert(response.status === 400, "预期 HTTP 400，实际为 " + response.status);
+        client.assert(response.body.code === 40001, "预期参数校验错误码 40001");
+    });
+%}
+
+### 19. 不携带 Token，应返回 401
+# @name requestWithoutToken
+GET {{baseUrl}}/api/admin/products/{{productId}}/skus
+
+> {%
+    client.test("未登录请求被拒绝", function () {
+        client.assert(response.status === 401, "预期 HTTP 401，实际为 " + response.status);
+        client.assert(response.body.code === 40100, "预期未登录错误码 40100");
+    });
+%}
+
+### 20. 商品上架
+# @name publishProduct
+PATCH {{baseUrl}}/api/admin/products/{{productId}}
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "publishStatus": 1
+}
+
+> {%
+    client.test("商品上架成功", function () {
+        client.assert(response.status === 200, "预期 HTTP 200，实际为 " + response.status);
+        client.assert(response.body.data.publishStatus === 1, "商品状态应该为已上架");
+    });
+%}
+
+### 21. 已上架商品整体替换 SKU，应返回 40926
+# @name replaceSkuOfPublishedProduct
+PUT {{baseUrl}}/api/admin/products/{{productId}}/skus
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "skus": [
+    {
+      "skuCode": "PUBLISHED-{{productId}}-BLACK",
+      "price": 4999.00,
+      "stock": 10,
+      "lowStock": 2,
+      "pic": null,
+      "specs": [
+        {
+          "productAttributeId": 3,
+          "value": "黑色"
+        }
+      ]
+    }
+  ]
+}
+
+> {%
+    client.test("已上架商品 SKU 修改被拒绝", function () {
+        client.assert(response.status === 409, "预期 HTTP 409，实际为 " + response.status);
+        client.assert(response.body.code === 40926, "预期业务错误码 40926");
+    });
+%}
+
+### 22. 恢复商品为下架状态
+# @name unpublishProduct
+PATCH {{baseUrl}}/api/admin/products/{{productId}}
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "publishStatus": 0
+}
+
+> {%
+    client.test("商品恢复下架状态", function () {
+        client.assert(response.status === 200, "预期 HTTP 200，实际为 " + response.status);
+        client.assert(response.body.data.publishStatus === 0, "商品状态应该恢复为下架");
+    });
+%}
+
+### 23. 最终确认正确 SKU 未被异常请求覆盖
+# @name finalSkuCheck
+GET {{baseUrl}}/api/admin/products/{{productId}}/skus
+Authorization: Bearer {{adminToken}}
+
+> {%
+    client.test("最终 SKU 数据保持正确", function () {
+        client.assert(response.status === 200, "预期 HTTP 200，实际为 " + response.status);
+        client.assert(response.body.data.length === 2, "最终应该仍有 2 个正确 SKU");
+    });
+%}

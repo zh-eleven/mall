@@ -303,6 +303,42 @@ public enum ErrorCode implements IErrorCode {
             40923,
             "已上架商品不能删除，请先下架",
             HttpStatus.CONFLICT
+    ),
+
+    SKU_SPEC_INVALID(
+            40016,
+            "SKU包含无效或不属于该商品的规格",
+            HttpStatus.BAD_REQUEST
+    ),
+
+    SKU_NOT_FOUND(
+            40412,
+            "SKU不存在",
+            HttpStatus.NOT_FOUND
+    ),
+
+    SKU_CODE_ALREADY_EXISTS(
+            40924,
+            "SKU编码已存在",
+            HttpStatus.CONFLICT
+    ),
+
+    SKU_SPEC_ALREADY_EXISTS(
+            40925,
+            "同一商品中已存在相同规格组合",
+            HttpStatus.CONFLICT
+    ),
+
+    PRODUCT_PUBLISHED_SKU_UPDATE_FORBIDDEN(
+            40926,
+            "已上架商品不能整体修改SKU，请先下架",
+            HttpStatus.CONFLICT
+    ),
+
+    PRODUCT_HAS_SKU_ATTRIBUTE_UPDATE_FORBIDDEN(
+            40927,
+            "商品存在SKU，请先清空SKU再修改商品属性值",
+            HttpStatus.CONFLICT
     );
 
 
