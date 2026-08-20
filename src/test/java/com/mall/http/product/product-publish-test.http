@@ -1,0 +1,393 @@
+@baseUrl = http://localhost:8080
+@adminUsername = admin
+@adminPassword = 123456
+
+# 必须是一个未删除且已经配置SKU的商品
+# 根据当前 mall.sql 可以先使用商品1
+@skuProductId = 1
+
+
+### 1. 管理员登录
+POST {{baseUrl}}/api/admin/auth/login
+Content-Type: application/json
+
+{
+  "username": "{{adminUsername}}",
+  "password": "{{adminPassword}}"
+}
+
+> {%
+    client.test("管理员登录成功", function () {
+        client.assert(response.status === 200,
+            "预期HTTP状态码为200，实际为：" + response.status);
+
+        client.assert(response.body.code === 200,
+            "预期业务码为200，实际为：" + response.body.code);
+
+        client.assert(response.body.data !== null,
+            "登录响应data不能为空");
+
+        client.assert(response.body.data.token !== null,
+            "登录响应中没有token");
+    });
+
+    if (response.status === 200
+        && response.body.data
+        && response.body.data.token) {
+
+        client.global.set(
+            "adminToken",
+            response.body.data.token
+        );
+    }
+%}
+
+
+### 2. 查询测试商品，并保存原始上架状态
+GET {{baseUrl}}/api/admin/products/{{skuProductId}}
+Authorization: Bearer {{adminToken}}
+
+> {%
+    client.test("查询SKU测试商品成功", function () {
+        client.assert(response.status === 200,
+            "预期HTTP状态码为200，实际为：" + response.status);
+
+        client.assert(response.body.code === 200,
+            "预期业务码为200，实际为：" + response.body.code);
+    });
+
+    if (response.status === 200 && response.body.data) {
+        client.global.set(
+            "originalPublishStatus",
+            String(response.body.data.publishStatus)
+        );
+    }
+%}
+
+
+### 3. 确认测试商品至少存在一个SKU
+GET {{baseUrl}}/api/admin/products/{{skuProductId}}/skus
+Authorization: Bearer {{adminToken}}
+
+> {%
+    client.test("测试商品存在SKU", function () {
+        client.assert(response.status === 200,
+            "查询SKU失败，HTTP状态码：" + response.status);
+
+        client.assert(response.body.code === 200,
+            "查询SKU失败，业务码：" + response.body.code);
+
+        client.assert(Array.isArray(response.body.data),
+            "SKU响应data应当是数组");
+
+        client.assert(response.body.data.length > 0,
+            "商品没有SKU，请修改skuProductId");
+    });
+%}
+
+
+### 4. 先将测试商品下架，保证测试起点一致
+PUT {{baseUrl}}/api/admin/products/{{skuProductId}}/publish-status
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "publishStatus": 0
+}
+
+> {%
+    client.test("商品下架成功", function () {
+        client.assert(response.status === 200,
+            "预期HTTP状态码为200，实际为：" + response.status);
+
+        client.assert(response.body.code === 200,
+            "预期业务码为200，实际为：" + response.body.code);
+
+        client.assert(response.body.data.publishStatus === 0,
+            "商品上架状态应当为0");
+    });
+%}
+
+
+### 5. 有SKU的商品上架成功
+PUT {{baseUrl}}/api/admin/products/{{skuProductId}}/publish-status
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "publishStatus": 1
+}
+
+> {%
+    client.test("有SKU的商品上架成功", function () {
+        client.assert(response.status === 200,
+            "预期HTTP状态码为200，实际为：" + response.status);
+
+        client.assert(response.body.code === 200,
+            "预期业务码为200，实际为：" + response.body.code);
+
+        client.assert(response.body.data.publishStatus === 1,
+            "商品上架状态应当为1");
+    });
+%}
+
+
+### 6. 重复上架应当直接成功
+PUT {{baseUrl}}/api/admin/products/{{skuProductId}}/publish-status
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "publishStatus": 1
+}
+
+> {%
+    client.test("重复上架保持成功", function () {
+        client.assert(response.status === 200,
+            "预期HTTP状态码为200，实际为：" + response.status);
+
+        client.assert(response.body.code === 200,
+            "预期业务码为200，实际为：" + response.body.code);
+
+        client.assert(response.body.data.publishStatus === 1,
+            "商品应当继续保持上架");
+    });
+%}
+
+
+### 7. 已上架商品禁止删除
+DELETE {{baseUrl}}/api/admin/products/{{skuProductId}}
+Authorization: Bearer {{adminToken}}
+
+> {%
+    client.test("已上架商品禁止删除", function () {
+        client.assert(response.status === 409,
+            "预期HTTP状态码为409，实际为：" + response.status);
+
+        client.assert(response.body.code === 40923,
+            "预期业务码为40923，实际为：" + response.body.code);
+    });
+%}
+
+
+### 8. 已上架商品禁止整体修改SKU
+PUT {{baseUrl}}/api/admin/products/{{skuProductId}}/skus
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "skus": []
+}
+
+> {%
+    client.test("已上架商品禁止修改SKU", function () {
+        client.assert(response.status === 409,
+            "预期HTTP状态码为409，实际为：" + response.status);
+
+        client.assert(response.body.code === 40926,
+            "预期业务码为40926，实际为：" + response.body.code);
+    });
+%}
+
+
+### 9. 商品下架
+PUT {{baseUrl}}/api/admin/products/{{skuProductId}}/publish-status
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "publishStatus": 0
+}
+
+> {%
+    client.test("商品下架成功", function () {
+        client.assert(response.status === 200,
+            "预期HTTP状态码为200，实际为：" + response.status);
+
+        client.assert(response.body.code === 200,
+            "预期业务码为200，实际为：" + response.body.code);
+
+        client.assert(response.body.data.publishStatus === 0,
+            "商品上架状态应当为0");
+    });
+%}
+
+
+### 10. 创建一个没有SKU的临时商品
+< {%
+    request.variables.set(
+        "temporaryProductSn",
+        "NO-SKU-TEST-" + Date.now()
+    );
+%}
+
+POST {{baseUrl}}/api/admin/products
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "brandId": 3,
+  "productCategoryId": 3,
+  "name": "无SKU上架测试商品",
+  "subTitle": "用于测试无SKU商品不能上架",
+  "productSn": "{{temporaryProductSn}}",
+  "price": 1999.00,
+  "originalPrice": 2299.00,
+  "unit": "部"
+}
+
+> {%
+    client.test("创建无SKU临时商品成功", function () {
+        client.assert(response.status === 200,
+            "预期HTTP状态码为200，实际为：" + response.status);
+
+        client.assert(response.body.code === 200,
+            "预期业务码为200，实际为：" + response.body.code);
+
+        client.assert(response.body.data.id !== null,
+            "返回的商品ID不能为空");
+
+        client.assert(response.body.data.publishStatus === 0,
+            "新商品必须默认为下架状态");
+    });
+
+    if (response.status === 200 && response.body.data) {
+        client.global.set(
+            "temporaryProductId",
+            String(response.body.data.id)
+        );
+
+        client.global.set(
+            "temporaryProductSn",
+            response.body.data.productSn
+        );
+    }
+%}
+
+
+### 11. 无SKU商品上架失败
+PUT {{baseUrl}}/api/admin/products/{{temporaryProductId}}/publish-status
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "publishStatus": 1
+}
+
+> {%
+    client.test("无SKU商品禁止上架", function () {
+        client.assert(response.status === 409,
+            "预期HTTP状态码为409，实际为：" + response.status);
+
+        client.assert(response.body.code === 40928,
+            "预期业务码为40928，实际为：" + response.body.code);
+    });
+%}
+
+
+### 12. 上架状态不能为空
+PUT {{baseUrl}}/api/admin/products/{{temporaryProductId}}/publish-status
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "publishStatus": null
+}
+
+> {%
+    client.test("上架状态不能为空", function () {
+        client.assert(response.status === 400,
+            "预期HTTP状态码为400，实际为：" + response.status);
+
+        client.assert(response.body.code === 40001,
+            "预期业务码为40001，实际为：" + response.body.code);
+    });
+%}
+
+
+### 13. 上架状态不能超出0和1
+PUT {{baseUrl}}/api/admin/products/{{temporaryProductId}}/publish-status
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "publishStatus": 2
+}
+
+> {%
+    client.test("非法上架状态校验成功", function () {
+        client.assert(response.status === 400,
+            "预期HTTP状态码为400，实际为：" + response.status);
+
+        client.assert(response.body.code === 40001,
+            "预期业务码为40001，实际为：" + response.body.code);
+    });
+%}
+
+
+### 14. 删除临时商品
+DELETE {{baseUrl}}/api/admin/products/{{temporaryProductId}}
+Authorization: Bearer {{adminToken}}
+
+> {%
+    client.test("删除临时商品成功", function () {
+        client.assert(response.status === 200,
+            "预期HTTP状态码为200，实际为：" + response.status);
+
+        client.assert(response.body.code === 200,
+            "预期业务码为200，实际为：" + response.body.code);
+    });
+%}
+
+
+### 15. 查询已删除商品应当返回不存在
+GET {{baseUrl}}/api/admin/products/{{temporaryProductId}}
+Authorization: Bearer {{adminToken}}
+
+> {%
+    client.test("已删除商品无法查询", function () {
+        client.assert(response.status === 404,
+            "预期HTTP状态码为404，实际为：" + response.status);
+
+        client.assert(response.body.code === 40411,
+            "预期业务码为40411，实际为：" + response.body.code);
+    });
+%}
+
+
+### 16. 商品列表不应返回已删除商品
+GET {{baseUrl}}/api/admin/products?keyword={{temporaryProductSn}}&pageNum=1&pageSize=10
+Authorization: Bearer {{adminToken}}
+
+> {%
+    client.test("商品列表排除已删除商品", function () {
+        client.assert(response.status === 200,
+            "预期HTTP状态码为200，实际为：" + response.status);
+
+        client.assert(response.body.code === 200,
+            "预期业务码为200，实际为：" + response.body.code);
+
+        client.assert(response.body.data.total === 0,
+            "商品列表中仍然存在已删除商品");
+    });
+%}
+
+
+### 17. 恢复SKU测试商品原始上架状态
+PUT {{baseUrl}}/api/admin/products/{{skuProductId}}/publish-status
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "publishStatus": {{originalPublishStatus}}
+}
+
+> {%
+    client.test("恢复商品原始状态成功", function () {
+        client.assert(response.status === 200,
+            "预期HTTP状态码为200，实际为：" + response.status);
+
+        client.assert(response.body.code === 200,
+            "预期业务码为200，实际为：" + response.body.code);
+    });
+%}

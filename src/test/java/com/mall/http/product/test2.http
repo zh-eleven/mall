@@ -1,0 +1,332 @@
+@baseUrl = http://localhost:8080
+@adminUsername = admin
+@adminPassword = 123456
+
+# 必须是已有属性值和SKU的商品
+@skuProductId = 1
+
+# 必须是与商品当前分类不同的有效二级分类
+@targetCategoryId = 4
+
+
+### 1. 管理员登录
+POST {{baseUrl}}/api/admin/auth/login
+Content-Type: application/json
+
+{
+  "username": "{{adminUsername}}",
+  "password": "{{adminPassword}}"
+}
+
+> {%
+    client.test("管理员登录成功", function () {
+        client.assert(response.status === 200,
+            "HTTP状态码应为200，实际为：" + response.status);
+
+        client.assert(response.body.code === 200,
+            "业务码应为200，实际为：" + response.body.code);
+
+        client.assert(response.body.data.token,
+            "登录响应中没有Token");
+    });
+
+    if (response.status === 200 && response.body.data) {
+        client.global.set(
+            "adminToken",
+            response.body.data.token
+        );
+    }
+%}
+
+
+### 2. 查询商品聚合详情并保存原始数据
+GET {{baseUrl}}/api/admin/products/{{skuProductId}}/detail
+Authorization: Bearer {{adminToken}}
+
+> {%
+    client.test("查询商品详情成功", function () {
+        client.assert(response.status === 200,
+            "HTTP状态码应为200，实际为：" + response.status);
+
+        client.assert(response.body.code === 200,
+            "业务码应为200，实际为：" + response.body.code);
+
+        client.assert(response.body.data.skus.length > 0,
+            "测试商品必须至少存在一个SKU");
+
+        client.assert(response.body.data.attributeValues.length > 0,
+            "测试商品必须至少存在一个属性值");
+    });
+
+    if (response.status === 200 && response.body.data) {
+        const product = response.body.data.product;
+
+        client.global.set(
+            "originalPrice",
+            String(product.price)
+        );
+
+        client.global.set(
+            "originalStock",
+            String(product.stock)
+        );
+
+        client.global.set(
+            "originalCategoryId",
+            String(product.productCategoryId)
+        );
+    }
+%}
+
+
+### 3. 有SKU时禁止直接修改商品价格
+< {%
+    const originalPrice =
+        Number(client.global.get("originalPrice"));
+
+    request.variables.set(
+        "changedPrice",
+        (originalPrice + 1).toFixed(2)
+    );
+%}
+
+PATCH {{baseUrl}}/api/admin/products/{{skuProductId}}
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "price": {{changedPrice}}
+}
+
+> {%
+    client.test("有SKU时禁止直接修改价格", function () {
+        client.assert(response.status === 409,
+            "HTTP状态码应为409，实际为：" + response.status);
+
+        client.assert(response.body.code === 40929,
+            "业务码应为40929，实际为：" + response.body.code);
+    });
+%}
+
+
+### 4. 有SKU时禁止直接修改商品库存
+< {%
+    const originalStock =
+        Number(client.global.get("originalStock"));
+
+    request.variables.set(
+        "changedStock",
+        String(originalStock + 1)
+    );
+%}
+
+PATCH {{baseUrl}}/api/admin/products/{{skuProductId}}
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "stock": {{changedStock}}
+}
+
+> {%
+    client.test("有SKU时禁止直接修改库存", function () {
+        client.assert(response.status === 409,
+            "HTTP状态码应为409，实际为：" + response.status);
+
+        client.assert(response.body.code === 40929,
+            "业务码应为40929，实际为：" + response.body.code);
+    });
+%}
+
+
+### 5. 有属性值或SKU时禁止修改商品分类
+PATCH {{baseUrl}}/api/admin/products/{{skuProductId}}
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "productCategoryId": {{targetCategoryId}}
+}
+
+> {%
+    client.test("禁止修改已有属性或SKU商品的分类", function () {
+        client.assert(response.status === 409,
+            "HTTP状态码应为409，实际为：" + response.status);
+
+        client.assert(response.body.code === 40930,
+            "业务码应为40930，实际为：" + response.body.code);
+    });
+%}
+
+
+### 6. 提交相同价格和库存应当允许
+PATCH {{baseUrl}}/api/admin/products/{{skuProductId}}
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "price": {{originalPrice}},
+  "stock": {{originalStock}}
+}
+
+> {%
+    client.test("相同价格和库存允许提交", function () {
+        client.assert(response.status === 200,
+            "HTTP状态码应为200，实际为：" + response.status);
+
+        client.assert(response.body.code === 200,
+            "业务码应为200，实际为：" + response.body.code);
+
+        client.assert(
+            Number(response.body.data.price)
+            === Number(client.global.get("originalPrice")),
+            "商品价格发生了意外变化"
+        );
+
+        client.assert(
+            Number(response.body.data.stock)
+            === Number(client.global.get("originalStock")),
+            "商品库存发生了意外变化"
+        );
+    });
+%}
+
+
+### 7. 确认被拒绝的操作没有修改数据
+GET {{baseUrl}}/api/admin/products/{{skuProductId}}/detail
+Authorization: Bearer {{adminToken}}
+
+> {%
+    client.test("被拒绝的请求没有修改商品数据", function () {
+        client.assert(response.status === 200,
+            "HTTP状态码应为200，实际为：" + response.status);
+
+        const product = response.body.data.product;
+
+        client.assert(
+            Number(product.price)
+            === Number(client.global.get("originalPrice")),
+            "商品价格被错误修改"
+        );
+
+        client.assert(
+            Number(product.stock)
+            === Number(client.global.get("originalStock")),
+            "商品库存被错误修改"
+        );
+
+        client.assert(
+            Number(product.productCategoryId)
+            === Number(client.global.get("originalCategoryId")),
+            "商品分类被错误修改"
+        );
+    });
+%}
+
+
+### 8. 创建一个没有属性值和SKU的临时商品
+< {%
+    request.variables.set(
+        "temporaryProductSn",
+        "CONSISTENCY-TEST-" + Date.now()
+    );
+%}
+
+POST {{baseUrl}}/api/admin/products
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "brandId": 3,
+  "productCategoryId": 3,
+  "name": "商品一致性测试",
+  "productSn": "{{temporaryProductSn}}",
+  "price": 100.00,
+  "originalPrice": 300.00,
+  "stock": 0,
+  "unit": "部"
+}
+
+> {%
+    client.test("创建临时商品成功", function () {
+        client.assert(response.status === 200,
+            "HTTP状态码应为200，实际为：" + response.status);
+
+        client.assert(response.body.code === 200,
+            "业务码应为200，实际为：" + response.body.code);
+    });
+
+    if (response.status === 200 && response.body.data) {
+        client.global.set(
+            "temporaryProductId",
+            String(response.body.data.id)
+        );
+    }
+%}
+
+
+### 9. 没有属性值和SKU时允许修改分类、价格和库存
+PATCH {{baseUrl}}/api/admin/products/{{temporaryProductId}}
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "productCategoryId": {{targetCategoryId}},
+  "price": 199.00,
+  "stock": 10
+}
+
+> {%
+    client.test("无SKU商品允许直接修改基础数据", function () {
+        client.assert(response.status === 200,
+            "HTTP状态码应为200，实际为：" + response.status);
+
+        client.assert(response.body.code === 200,
+            "业务码应为200，实际为：" + response.body.code);
+
+        client.assert(
+            Number(response.body.data.productCategoryId) === 4,
+            "商品分类修改失败"
+        );
+
+        client.assert(
+            Number(response.body.data.price) === 199,
+            "商品价格修改失败"
+        );
+
+        client.assert(
+            Number(response.body.data.stock) === 10,
+            "商品库存修改失败"
+        );
+    });
+%}
+
+
+### 10. 删除临时商品
+DELETE {{baseUrl}}/api/admin/products/{{temporaryProductId}}
+Authorization: Bearer {{adminToken}}
+
+> {%
+    client.test("删除临时商品成功", function () {
+        client.assert(response.status === 200,
+            "HTTP状态码应为200，实际为：" + response.status);
+
+        client.assert(response.body.code === 200,
+            "业务码应为200，实际为：" + response.body.code);
+    });
+%}
+
+
+### 11. 确认临时商品已经逻辑删除
+GET {{baseUrl}}/api/admin/products/{{temporaryProductId}}
+Authorization: Bearer {{adminToken}}
+
+> {%
+    client.test("逻辑删除商品无法查询", function () {
+        client.assert(response.status === 404,
+            "HTTP状态码应为404，实际为：" + response.status);
+
+        client.assert(response.body.code === 40411,
+            "业务码应为40411，实际为：" + response.body.code);
+    });
+%}

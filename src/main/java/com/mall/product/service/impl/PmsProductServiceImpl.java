@@ -21,9 +21,15 @@ import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
-
+import com.mall.product.mapper.PmsSkuStockMapper;
 import java.math.BigDecimal;
 import java.util.Locale;
+import com.mall.product.entity.PmsSkuStock;
+import com.mall.product.mapper.PmsProductAttributeValueMapper;
+import com.mall.product.entity.PmsProductAttributeValue;
+import com.mall.product.vo.ProductAttributeValueVO;
+import com.mall.product.vo.ProductDetailVO;
+import com.mall.product.vo.SkuStockVO;
 
 @Service
 @RequiredArgsConstructor
@@ -32,6 +38,9 @@ public class PmsProductServiceImpl implements PmsProductService {
     private final PmsProductMapper productMapper;
     private final PmsBrandMapper brandMapper;
     private final PmsProductCategoryMapper categoryMapper;
+    private final PmsSkuStockMapper skuStockMapper;
+    private final PmsProductAttributeValueMapper attributeValueMapper;
+
 
     @Override
     @Transactional
@@ -56,7 +65,7 @@ public class PmsProductServiceImpl implements PmsProductService {
         product.setLowStock(defaultValue(dto.getLowStock()));
         product.setUnit(normalizeText(dto.getUnit()));
         product.setWeight(dto.getWeight());
-        product.setPublishStatus(defaultValue(dto.getPublishStatus()));
+        product.setPublishStatus(0);
         product.setNewStatus(defaultValue(dto.getNewStatus()));
         product.setRecommendStatus(
                 defaultValue(dto.getRecommendStatus())
@@ -152,6 +161,7 @@ public class PmsProductServiceImpl implements PmsProductService {
         if (!hasUpdates(dto)) {
             return ProductVO.from(current);
         }
+        validateUpdateConsistency(productId, current, dto);
 
         Long targetCategoryId =
                 dto.getProductCategoryId() == null
@@ -252,11 +262,6 @@ public class PmsProductServiceImpl implements PmsProductService {
                 dto.getWeight()
         );
 
-        wrapper.set(
-                dto.getPublishStatus() != null,
-                PmsProduct::getPublishStatus,
-                dto.getPublishStatus()
-        );
 
         wrapper.set(
                 dto.getNewStatus() != null,
@@ -332,6 +337,62 @@ public class PmsProductServiceImpl implements PmsProductService {
 
     @Override
     @Transactional
+    public ProductVO updatePublishStatus(
+            Long productId,
+            Integer publishStatus) {
+
+        if (publishStatus == null
+                || (!Integer.valueOf(0).equals(publishStatus)
+                && !Integer.valueOf(1).equals(publishStatus))) {
+
+            throw new BusinessException(
+                    ErrorCode.PARAM_VALIDATION_FAILED
+            );
+        }
+
+        PmsProduct product = findById(productId);
+
+        if (publishStatus.equals(product.getPublishStatus())) {
+            return ProductVO.from(product);
+        }
+
+        if (Integer.valueOf(1).equals(publishStatus)) {
+            Long skuCount = skuStockMapper.selectCount(
+                    new LambdaQueryWrapper<PmsSkuStock>()
+                            .eq(
+                                    PmsSkuStock::getProductId,
+                                    productId
+                            )
+            );
+
+            if (skuCount == 0) {
+                throw new BusinessException(
+                        ErrorCode.PRODUCT_SKU_REQUIRED
+                );
+            }
+        }
+
+        int updated = productMapper.update(
+                null,
+                new LambdaUpdateWrapper<PmsProduct>()
+                        .eq(PmsProduct::getId, productId)
+                        .set(
+                                PmsProduct::getPublishStatus,
+                                publishStatus
+                        )
+        );
+
+        if (updated != 1) {
+            throw new BusinessException(
+                    ErrorCode.DATA_CONFLICT
+            );
+        }
+
+        return ProductVO.from(findById(productId));
+    }
+
+    @Override
+    @Transactional
     public void delete(Long productId) {
         PmsProduct product = findById(productId);
 
@@ -360,6 +421,46 @@ public class PmsProductServiceImpl implements PmsProductService {
         }
 
         return product;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public ProductDetailVO getDetail(Long productId) {
+
+        PmsProduct product = findById(productId);
+
+        var attributeValues = attributeValueMapper.selectList(
+                        new LambdaQueryWrapper<PmsProductAttributeValue>()
+                                .eq(
+                                        PmsProductAttributeValue::getProductId,
+                                        productId
+                                )
+                                .orderByAsc(
+                                        PmsProductAttributeValue
+                                                ::getProductAttributeId
+                                )
+                )
+                .stream()
+                .map(ProductAttributeValueVO::from)
+                .toList();
+
+        var skus = skuStockMapper.selectList(
+                        new LambdaQueryWrapper<PmsSkuStock>()
+                                .eq(
+                                        PmsSkuStock::getProductId,
+                                        productId
+                                )
+                                .orderByAsc(PmsSkuStock::getId)
+                )
+                .stream()
+                .map(SkuStockVO::from)
+                .toList();
+
+        return new ProductDetailVO(
+                ProductVO.from(product),
+                attributeValues,
+                skus
+        );
     }
 
     private void validateBrand(Long brandId) {
@@ -451,7 +552,6 @@ public class PmsProductServiceImpl implements PmsProductService {
                 || dto.getLowStock() != null
                 || dto.getUnit() != null
                 || dto.getWeight() != null
-                || dto.getPublishStatus() != null
                 || dto.getNewStatus() != null
                 || dto.getRecommendStatus() != null
                 || dto.getVerifyStatus() != null
@@ -462,5 +562,68 @@ public class PmsProductServiceImpl implements PmsProductService {
                 || dto.getDetailTitle() != null
                 || dto.getDetailDesc() != null
                 || dto.getDetailHtml() != null;
+    }
+
+    private void validateUpdateConsistency(
+            Long productId,
+            PmsProduct current,
+            ProductUpdateDTO dto) {
+
+        boolean categoryChanged =
+                dto.getProductCategoryId() != null
+                        && !dto.getProductCategoryId().equals(
+                        current.getProductCategoryId()
+                );
+
+        boolean priceChanged =
+                dto.getPrice() != null
+                        && dto.getPrice().compareTo(
+                        current.getPrice()
+                ) != 0;
+
+        boolean stockChanged =
+                dto.getStock() != null
+                        && !dto.getStock().equals(
+                        current.getStock()
+                );
+
+        if (!categoryChanged
+                && !priceChanged
+                && !stockChanged) {
+            return;
+        }
+
+        Long skuCount = skuStockMapper.selectCount(
+                new LambdaQueryWrapper<PmsSkuStock>()
+                        .eq(
+                                PmsSkuStock::getProductId,
+                                productId
+                        )
+        );
+
+        if (categoryChanged) {
+            Long attributeValueCount =
+                    attributeValueMapper.selectCount(
+                            new LambdaQueryWrapper<
+                                    PmsProductAttributeValue>()
+                                    .eq(
+                                            PmsProductAttributeValue
+                                                    ::getProductId,
+                                            productId
+                                    )
+                    );
+
+            if (skuCount > 0 || attributeValueCount > 0) {
+                throw new BusinessException(
+                        ErrorCode.PRODUCT_CATEGORY_CHANGE_FORBIDDEN
+                );
+            }
+        }
+
+        if ((priceChanged || stockChanged) && skuCount > 0) {
+            throw new BusinessException(
+                    ErrorCode.PRODUCT_SKU_DATA_UPDATE_FORBIDDEN
+            );
+        }
     }
 }

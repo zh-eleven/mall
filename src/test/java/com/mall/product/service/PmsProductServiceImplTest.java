@@ -15,6 +15,7 @@ import com.mall.product.mapper.PmsBrandMapper;
 import com.mall.product.mapper.PmsProductCategoryMapper;
 import com.mall.product.mapper.PmsProductMapper;
 import com.mall.product.service.impl.PmsProductServiceImpl;
+import com.mall.product.vo.ProductVO;
 import jakarta.validation.Validation;
 import jakarta.validation.ValidatorFactory;
 import org.junit.jupiter.api.BeforeEach;
@@ -34,13 +35,21 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
+import com.mall.product.mapper.PmsSkuStockMapper;
+import com.mall.product.entity.PmsProductAttributeValue;
+import com.mall.product.entity.PmsSkuStock;
+import com.mall.product.mapper.PmsProductAttributeValueMapper;
 
 @ExtendWith(MockitoExtension.class)
 class PmsProductServiceImplTest {
 
     @BeforeAll
     static void initializeMybatisMetadata() {
-        MybatisTestSupport.initializeTableInfo(PmsProduct.class);
+        MybatisTestSupport.initializeTableInfo(
+                PmsProduct.class,
+                PmsProductAttributeValue.class,
+                PmsSkuStock.class
+        );
     }
 
     @Mock
@@ -54,12 +63,20 @@ class PmsProductServiceImplTest {
 
     private PmsProductServiceImpl productService;
 
+    @Mock
+    private PmsSkuStockMapper skuStockMapper;
+
+    @Mock
+    private PmsProductAttributeValueMapper attributeValueMapper;
+
     @BeforeEach
     void setUp() {
         productService = new PmsProductServiceImpl(
                 productMapper,
                 brandMapper,
-                categoryMapper
+                categoryMapper,
+                skuStockMapper,
+                attributeValueMapper
         );
     }
 
@@ -425,5 +442,185 @@ class PmsProductServiceImplTest {
         product.setSort(0);
         product.setDeleteStatus(0);
         return product;
+    }
+
+    @Test
+    void publishShouldRejectProductWithoutSku() {
+        when(productMapper.selectById(10L))
+                .thenReturn(product(10L, "PHONE-01", 0));
+        when(skuStockMapper.selectCount(any()))
+                .thenReturn(0L);
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> productService.updatePublishStatus(10L, 1)
+        );
+
+        assertSame(
+                ErrorCode.PRODUCT_SKU_REQUIRED,
+                exception.getErrorCode()
+        );
+        verify(productMapper, never()).update(isNull(), any());
+    }
+
+    @Test
+    void publishShouldSucceedWhenProductHasSku() {
+        PmsProduct product = product(10L, "PHONE-01", 0);
+
+        when(productMapper.selectById(10L))
+                .thenReturn(product);
+        when(skuStockMapper.selectCount(any()))
+                .thenReturn(2L);
+        when(productMapper.update(isNull(), any()))
+                .thenAnswer(invocation -> {
+                    product.setPublishStatus(1);
+                    return 1;
+                });
+
+        ProductVO result =
+                productService.updatePublishStatus(10L, 1);
+
+        assertEquals(1, result.publishStatus());
+        verify(skuStockMapper).selectCount(any());
+        verify(productMapper).update(isNull(), any());
+    }
+
+    @Test
+    void unpublishShouldNotCheckSku() {
+        PmsProduct product = product(10L, "PHONE-01", 1);
+
+        when(productMapper.selectById(10L))
+                .thenReturn(product);
+        when(productMapper.update(isNull(), any()))
+                .thenAnswer(invocation -> {
+                    product.setPublishStatus(0);
+                    return 1;
+                });
+
+        ProductVO result =
+                productService.updatePublishStatus(10L, 0);
+
+        assertEquals(0, result.publishStatus());
+        verifyNoInteractions(skuStockMapper);
+        verify(productMapper).update(isNull(), any());
+    }
+    @Test
+    void getDetailShouldReturnProductAttributeValuesAndSkus() {
+        PmsProduct product = product(10L, "PHONE-01", 0);
+
+        PmsProductAttributeValue attributeValue =
+                new PmsProductAttributeValue();
+        attributeValue.setId(20L);
+        attributeValue.setProductId(10L);
+        attributeValue.setProductAttributeId(2L);
+        attributeValue.setValue("麒麟9000S");
+
+        PmsSkuStock sku = new PmsSkuStock();
+        sku.setId(30L);
+        sku.setProductId(10L);
+        sku.setSkuCode("PHONE-01-BLACK");
+        sku.setPrice(new BigDecimal("100.00"));
+        sku.setStock(10);
+        sku.setLockedStock(0);
+        sku.setLowStock(2);
+        sku.setSpecKey("3=黑色");
+        sku.setSpecData(
+                "[{\"attributeId\":3,\"name\":\"颜色\",\"value\":\"黑色\"}]"
+        );
+
+        when(productMapper.selectById(10L))
+                .thenReturn(product);
+        when(attributeValueMapper.selectList(any()))
+                .thenReturn(List.of(attributeValue));
+        when(skuStockMapper.selectList(any()))
+                .thenReturn(List.of(sku));
+
+        var result = productService.getDetail(10L);
+
+        assertEquals(10L, result.product().id());
+
+        assertEquals(1, result.attributeValues().size());
+        assertEquals(
+                "麒麟9000S",
+                result.attributeValues().getFirst().getValue()
+        );
+
+        assertEquals(1, result.skus().size());
+        assertEquals(
+                "PHONE-01-BLACK",
+                result.skus().getFirst().getSkuCode()
+        );
+    }
+    @Test
+    void updateShouldRejectPriceChangeWhenProductHasSku() {
+        PmsProduct current = product(10L, "PHONE-01", 0);
+
+        ProductUpdateDTO dto = new ProductUpdateDTO();
+        dto.setPrice(new BigDecimal("99.00"));
+
+        when(productMapper.selectById(10L))
+                .thenReturn(current);
+        when(skuStockMapper.selectCount(any()))
+                .thenReturn(1L);
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> productService.update(10L, dto)
+        );
+
+        assertSame(
+                ErrorCode.PRODUCT_SKU_DATA_UPDATE_FORBIDDEN,
+                exception.getErrorCode()
+        );
+        verify(productMapper, never()).update(isNull(), any());
+    }
+    @Test
+    void updateShouldRejectStockChangeWhenProductHasSku() {
+        PmsProduct current = product(10L, "PHONE-01", 0);
+
+        ProductUpdateDTO dto = new ProductUpdateDTO();
+        dto.setStock(100);
+
+        when(productMapper.selectById(10L))
+                .thenReturn(current);
+        when(skuStockMapper.selectCount(any()))
+                .thenReturn(2L);
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> productService.update(10L, dto)
+        );
+
+        assertSame(
+                ErrorCode.PRODUCT_SKU_DATA_UPDATE_FORBIDDEN,
+                exception.getErrorCode()
+        );
+        verify(productMapper, never()).update(isNull(), any());
+    }
+    @Test
+    void updateShouldRejectCategoryChangeWhenProductHasAttributeValues() {
+        PmsProduct current = product(10L, "PHONE-01", 0);
+
+        ProductUpdateDTO dto = new ProductUpdateDTO();
+        dto.setProductCategoryId(30L);
+
+        when(productMapper.selectById(10L))
+                .thenReturn(current);
+        when(skuStockMapper.selectCount(any()))
+                .thenReturn(0L);
+        when(attributeValueMapper.selectCount(any()))
+                .thenReturn(2L);
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> productService.update(10L, dto)
+        );
+
+        assertSame(
+                ErrorCode.PRODUCT_CATEGORY_CHANGE_FORBIDDEN,
+                exception.getErrorCode()
+        );
+        verify(categoryMapper, never()).selectById(anyLong());
+        verify(productMapper, never()).update(isNull(), any());
     }
 }

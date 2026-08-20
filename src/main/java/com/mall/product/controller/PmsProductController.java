@@ -12,6 +12,9 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
+import com.mall.product.dto.ProductPublishStatusDTO;
+import com.mall.product.vo.ProductDetailVO;
+
 
 @RestController
 @RequestMapping("/api/admin/products")
@@ -98,6 +101,26 @@ public class PmsProductController {
         );
     }
 
+    @PutMapping("/{productId}/publish-status")
+    @PreAuthorize("hasAuthority('product:write')")
+    public ApiResult<ProductVO> updatePublishStatus(
+            @PathVariable
+            @Positive(message = "商品ID必须大于0")
+            Long productId,
+            @Valid @RequestBody
+            ProductPublishStatusDTO dto) {
+
+        return ApiResult.success(
+                productService.updatePublishStatus(
+                        productId,
+                        dto.getPublishStatus()
+                ),
+                dto.getPublishStatus() == 1
+                        ? "商品上架成功"
+                        : "商品下架成功"
+        );
+    }
+
     @DeleteMapping("/{productId}")
     @PreAuthorize("hasAuthority('product:write')")
     public ApiResult<Void> delete(
@@ -110,6 +133,18 @@ public class PmsProductController {
         return ApiResult.success(
                 null,
                 "商品删除成功"
+        );
+    }
+
+    @GetMapping("/{productId}/detail")
+    @PreAuthorize("hasAuthority('product:read')")
+    public ApiResult<ProductDetailVO> getDetail(
+            @PathVariable
+            @Positive(message = "商品ID必须大于0")
+            Long productId) {
+
+        return ApiResult.success(
+                productService.getDetail(productId)
         );
     }
 }

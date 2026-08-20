@@ -64,9 +64,6 @@ public class ProductCreateDTO {
     )
     private BigDecimal weight;
 
-    @Min(value = 0, message = "上架状态只能为0或1")
-    @Max(value = 1, message = "上架状态只能为0或1")
-    private Integer publishStatus;
 
     @Min(value = 0, message = "新品状态只能为0或1")
     @Max(value = 1, message = "新品状态只能为0或1")

@@ -334,10 +334,25 @@ public enum ErrorCode implements IErrorCode {
             "已上架商品不能整体修改SKU，请先下架",
             HttpStatus.CONFLICT
     ),
-
+    PRODUCT_SKU_REQUIRED(
+            40928,
+            "商品至少需要一个SKU才能上架",
+            HttpStatus.CONFLICT
+    ),
     PRODUCT_HAS_SKU_ATTRIBUTE_UPDATE_FORBIDDEN(
             40927,
             "商品存在SKU，请先清空SKU再修改商品属性值",
+            HttpStatus.CONFLICT
+    ),
+    PRODUCT_SKU_DATA_UPDATE_FORBIDDEN(
+            40929,
+            "商品存在SKU，价格和库存必须通过SKU接口维护",
+            HttpStatus.CONFLICT
+    ),
+
+    PRODUCT_CATEGORY_CHANGE_FORBIDDEN(
+            40930,
+            "商品存在属性值或SKU，请先清空后再更换分类",
             HttpStatus.CONFLICT
     );
 

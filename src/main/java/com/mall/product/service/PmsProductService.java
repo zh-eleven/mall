@@ -4,6 +4,7 @@ import com.mall.common.api.PageResult;
 import com.mall.product.dto.ProductCreateDTO;
 import com.mall.product.dto.ProductUpdateDTO;
 import com.mall.product.vo.ProductVO;
+import com.mall.product.vo.ProductDetailVO;
 
 public interface PmsProductService {
 
@@ -20,9 +21,16 @@ public interface PmsProductService {
 
     ProductVO getById(Long productId);
 
+    ProductDetailVO getDetail(Long productId);
+
     ProductVO update(
             Long productId,
             ProductUpdateDTO dto
+    );
+
+    ProductVO updatePublishStatus(
+            Long productId,
+            Integer publishStatus
     );
 
     void delete(Long productId);
