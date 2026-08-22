@@ -1,0 +1,142 @@
+@baseUrl = http://localhost:8080
+
+### 1. 游客分页查询已上架商品
+GET {{baseUrl}}/api/products?pageNum=1&pageSize=10
+Accept: application/json
+
+> {%
+    client.test("游客可以查询商品列表", function () {
+        client.assert(
+            response.status === 200,
+            "HTTP状态码应为200，实际为：" + response.status
+        );
+
+        client.assert(
+            response.body.code === 200,
+            "业务码应为200，实际为：" + response.body.code
+        );
+
+        client.assert(
+            Array.isArray(response.body.data.list),
+            "data.list应为数组"
+        );
+
+        client.assert(
+            response.body.data.list.length > 0,
+            "没有已上架商品，请先在后台上架一个商品"
+        );
+    });
+
+    const list = response.body.data.list;
+
+    if (list.length > 0) {
+        client.global.set(
+            "portalProductId",
+            String(list[0].id)
+        );
+    }
+%}
+
+### 2. 游客查询商品详情
+GET {{baseUrl}}/api/products/{{portalProductId}}
+Accept: application/json
+
+> {%
+    client.test("游客可以查询已上架商品详情", function () {
+        client.assert(
+            response.status === 200,
+            "HTTP状态码应为200，实际为：" + response.status
+        );
+
+        client.assert(
+            response.body.code === 200,
+            "业务码应为200，实际为：" + response.body.code
+        );
+
+        client.assert(
+            String(response.body.data.id)
+            === client.global.get("portalProductId"),
+            "返回的商品ID不正确"
+        );
+
+        client.assert(
+            Array.isArray(response.body.data.albumPics),
+            "albumPics应为数组"
+        );
+
+        client.assert(
+            Array.isArray(response.body.data.attributes),
+            "attributes应为数组"
+        );
+
+        client.assert(
+            Array.isArray(response.body.data.skus),
+            "skus应为数组"
+        );
+    });
+%}
+
+### 3. 游客查询商品分类树
+GET {{baseUrl}}/api/product-categories/tree
+Accept: application/json
+
+> {%
+    client.test("游客可以查询商品分类树", function () {
+        client.assert(
+            response.status === 200,
+            "HTTP状态码应为200，实际为：" + response.status
+        );
+
+        client.assert(
+            response.body.code === 200,
+            "业务码应为200，实际为：" + response.body.code
+        );
+
+        client.assert(
+            Array.isArray(response.body.data),
+            "data应为数组"
+        );
+
+        client.assert(
+            response.body.data.length > 0,
+            "分类树不能为空，请确认存在已显示分类"
+        );
+    });
+
+    client.test("分类树结构正确", function () {
+        response.body.data.forEach(function (parent) {
+            client.assert(parent.id != null, "一级分类缺少id");
+            client.assert(parent.name != null, "一级分类缺少name");
+            client.assert(
+                Array.isArray(parent.children),
+                "一级分类children应为数组"
+            );
+
+            parent.children.forEach(function (child) {
+                client.assert(child.id != null, "二级分类缺少id");
+                client.assert(child.name != null, "二级分类缺少name");
+                client.assert(
+                    Array.isArray(child.children),
+                    "二级分类children应为数组"
+                );
+            });
+        });
+    });
+
+    client.test("未暴露后台管理字段", function () {
+        response.body.data.forEach(function (category) {
+            client.assert(
+                category.showStatus === undefined,
+                "不应返回showStatus"
+            );
+            client.assert(
+                category.navStatus === undefined,
+                "不应返回navStatus"
+            );
+            client.assert(
+                category.sort === undefined,
+                "不应返回sort"
+            );
+        });
+    });
+%}

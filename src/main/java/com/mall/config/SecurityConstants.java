@@ -1,4 +1,4 @@
-package com.mall.security;
+package com.mall.config;
 
 public final class SecurityConstants {
 
@@ -8,6 +8,6 @@ public final class SecurityConstants {
     public static final String[] WHITE_LIST = {
             "/api/members/register",
             "/api/members/login",
-            "/api/admin/auth/login"
+            "/api/admin/auth/login",
     };
 }

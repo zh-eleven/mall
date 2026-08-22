@@ -354,6 +354,16 @@ public enum ErrorCode implements IErrorCode {
             40930,
             "商品存在属性值或SKU，请先清空后再更换分类",
             HttpStatus.CONFLICT
+    ),
+    STOCK_INSUFFICIENT(
+            40931,
+            "商品库存不足",
+            HttpStatus.CONFLICT
+    ),
+    CART_ITEM_NOT_FOUND(
+            40413,
+            "购物车商品不存在",
+            HttpStatus.NOT_FOUND
     );
 
 

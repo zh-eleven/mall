@@ -1,0 +1,414 @@
+@baseUrl = http://localhost:8080
+@memberUsername = test003
+@memberPassword = 123456
+@otherUsername = test004
+@otherPassword = 123456
+
+### 1. 会员登录
+POST {{baseUrl}}/api/members/login
+Content-Type: application/json
+
+{
+  "username": "{{memberUsername}}",
+  "password": "{{memberPassword}}"
+}
+
+> {%
+    client.test("会员登录成功", function () {
+        client.assert(response.status === 200);
+        client.assert(response.body.code === 200);
+    });
+
+    client.global.set(
+        "memberToken",
+        response.body.data.token
+    );
+%}
+
+### 2. 查询已上架商品
+GET {{baseUrl}}/api/products?pageNum=1&pageSize=100
+
+> {%
+    const list = response.body.data.list;
+
+    client.test("存在已上架商品", function () {
+        client.assert(list.length > 0);
+    });
+
+    if (list.length > 0) {
+        client.global.set(
+            "cartProductId",
+            String(list[0].id)
+        );
+    }
+%}
+
+### 3. 获取一个库存充足的SKU
+GET {{baseUrl}}/api/products/{{cartProductId}}
+
+> {%
+    const sku = response.body.data.skus.find(
+        item => item.availableStock >= 5
+    );
+
+    client.test("存在可用于测试的SKU", function () {
+        client.assert(
+            sku != null,
+            "请为商品准备一个可售库存不少于5的SKU"
+        );
+    });
+
+    if (sku) {
+        client.global.set("cartSkuId", String(sku.id));
+        client.global.set(
+            "availableStock",
+            String(sku.availableStock)
+        );
+    }
+%}
+
+### 4. 未登录不能查询购物车
+GET {{baseUrl}}/api/members/me/cart
+
+> {%
+    client.test("未登录访问购物车返回401", function () {
+        client.assert(response.status === 401);
+        client.assert(response.body.code === 40100);
+    });
+%}
+
+### 5. 加入1件商品
+POST {{baseUrl}}/api/members/me/cart
+Authorization: Bearer {{memberToken}}
+Content-Type: application/json
+
+{
+  "skuId": {{cartSkuId}},
+  "quantity": 1
+}
+
+> {%
+    const data = response.body.data;
+
+    client.test("商品加入购物车成功", function () {
+        client.assert(
+            response.status === 200,
+            "HTTP状态码实际为：" + response.status
+        );
+
+        client.assert(
+            response.body.code === 200,
+            "业务信息：" + response.body.message
+        );
+
+        client.assert(
+            data != null,
+            "返回的购物车项不能为空"
+        );
+
+        if (data != null) {
+            client.assert(
+                String(data.skuId)
+                === client.global.get("cartSkuId"),
+                "返回的SKU ID不正确"
+            );
+        }
+    });
+
+    if (data != null) {
+        client.global.set(
+            "quantityAfterFirstAdd",
+            String(data.quantity)
+        );
+
+        client.global.set(
+            "cartItemId",
+            String(data.id)
+        );
+    }
+%}
+
+### 6. 重复加入2件，数量应累加
+POST {{baseUrl}}/api/members/me/cart
+Authorization: Bearer {{memberToken}}
+Content-Type: application/json
+
+{
+  "skuId": {{cartSkuId}},
+  "quantity": 2
+}
+
+> {%
+    const expected =
+        Number(client.global.get("quantityAfterFirstAdd")) + 2;
+
+    client.test("相同SKU数量正确累加", function () {
+        client.assert(response.status === 200);
+        client.assert(response.body.code === 200);
+        client.assert(response.body.data.quantity === expected);
+        client.assert(
+            String(response.body.data.id)
+            === client.global.get("cartItemId"),
+            "重复加入不应创建新的购物车项"
+        );
+    });
+
+    const available =
+        Number(client.global.get("availableStock"));
+
+    const insufficientQuantity =
+        available - response.body.data.quantity + 1;
+
+    client.global.set(
+        "expectedCartQuantity",
+        String(expected)
+    );
+    client.global.set(
+        "insufficientQuantity",
+        String(insufficientQuantity)
+    );
+%}
+
+### 7. 查询购物车
+GET {{baseUrl}}/api/members/me/cart
+Authorization: Bearer {{memberToken}}
+
+> {%
+    const skuId = client.global.get("cartSkuId");
+    const item = response.body.data.find(
+        value => String(value.skuId) === skuId
+    );
+
+    client.test("购物车包含刚加入的SKU", function () {
+        client.assert(item != null);
+        client.assert(
+            item.quantity
+            === Number(client.global.get("expectedCartQuantity"))
+        );
+        client.assert(item.available === true);
+    });
+%}
+
+### 8. 加入超过库存的数量
+POST {{baseUrl}}/api/members/me/cart
+Authorization: Bearer {{memberToken}}
+Content-Type: application/json
+
+{
+  "skuId": {{cartSkuId}},
+  "quantity": {{insufficientQuantity}}
+}
+
+> {%
+    client.test("超过库存时加入失败", function () {
+        client.assert(response.status === 409);
+        client.assert(response.body.code === 40931);
+    });
+%}
+
+### 9. 修改购物车数量
+PATCH {{baseUrl}}/api/members/me/cart/{{cartItemId}}/quantity
+Authorization: Bearer {{memberToken}}
+Content-Type: application/json
+
+{
+  "quantity": 2
+}
+
+> {%
+    client.test("购物车数量修改成功", function () {
+        client.assert(response.status === 200);
+        client.assert(response.body.code === 200);
+        client.assert(response.body.data.quantity === 2);
+    });
+%}
+
+### 10. 修改数量超过库存
+PATCH {{baseUrl}}/api/members/me/cart/{{cartItemId}}/quantity
+Authorization: Bearer {{memberToken}}
+Content-Type: application/json
+
+{
+  "quantity": 999
+}
+
+> {%
+    client.test("超过库存时修改失败", function () {
+        client.assert(response.status === 409);
+        client.assert(response.body.code === 40931);
+    });
+%}
+
+### 11. 取消选中
+PATCH {{baseUrl}}/api/members/me/cart/{{cartItemId}}/selected
+Authorization: Bearer {{memberToken}}
+Content-Type: application/json
+
+{
+  "selected": false
+}
+
+> {%
+    client.test("取消选中成功", function () {
+        client.assert(response.status === 200);
+        client.assert(response.body.code === 200);
+        client.assert(response.body.data.selected === false);
+    });
+%}
+
+### 12. 查询并确认修改结果
+GET {{baseUrl}}/api/members/me/cart
+Authorization: Bearer {{memberToken}}
+
+> {%
+    const skuId = client.global.get("cartSkuId");
+    const item = response.body.data.find(
+        value => String(value.skuId) === skuId
+    );
+
+    client.test("购物车修改结果正确", function () {
+        client.assert(item != null);
+
+        if (item != null) {
+            client.assert(item.quantity === 2);
+            client.assert(item.selected === false);
+        }
+    });
+%}
+
+### 13. 删除购物车商品
+DELETE {{baseUrl}}/api/members/me/cart/{{cartItemId}}
+Authorization: Bearer {{memberToken}}
+
+> {%
+    client.test("购物车商品删除成功", function () {
+        client.assert(response.status === 200);
+        client.assert(response.body.code === 200);
+        client.assert(response.body.data === null);
+    });
+%}
+
+### 14. 重复删除不存在的购物车项
+DELETE {{baseUrl}}/api/members/me/cart/{{cartItemId}}
+Authorization: Bearer {{memberToken}}
+
+> {%
+    client.test("重复删除返回购物车项不存在", function () {
+        client.assert(response.status === 404);
+        client.assert(response.body.code === 40413);
+    });
+%}
+
+### 15. 确认商品已从购物车删除
+GET {{baseUrl}}/api/members/me/cart
+Authorization: Bearer {{memberToken}}
+
+> {%
+    const skuId = client.global.get("cartSkuId");
+    const item = response.body.data.find(
+        value => String(value.skuId) === skuId
+    );
+
+    client.test("已删除商品不再出现", function () {
+        client.assert(item == null);
+    });
+%}
+
+### 16. 会员A重新加入商品
+POST {{baseUrl}}/api/members/me/cart
+Authorization: Bearer {{memberToken}}
+Content-Type: application/json
+
+{
+  "skuId": {{cartSkuId}},
+  "quantity": 1
+}
+
+> {%
+    client.test("会员A创建购物车项成功", function () {
+        client.assert(response.status === 200);
+        client.assert(response.body.code === 200);
+    });
+
+    if (response.body.data != null) {
+        client.global.set(
+            "ownerCartItemId",
+            String(response.body.data.id)
+        );
+    }
+%}
+
+### 17. 注册会员B（只执行一次）
+POST {{baseUrl}}/api/members/register
+Content-Type: application/json
+
+{
+  "username": "{{otherUsername}}",
+  "password": "{{otherPassword}}"
+}
+
+### 18. 会员B登录
+POST {{baseUrl}}/api/members/login
+Content-Type: application/json
+
+{
+  "username": "{{otherUsername}}",
+  "password": "{{otherPassword}}"
+}
+
+> {%
+    client.test("会员B登录成功", function () {
+        client.assert(response.status === 200);
+        client.assert(response.body.code === 200);
+    });
+
+    client.global.set(
+        "otherMemberToken",
+        response.body.data.token
+    );
+%}
+
+### 19. 会员B不能修改会员A的购物车
+PATCH {{baseUrl}}/api/members/me/cart/{{ownerCartItemId}}/quantity
+Authorization: Bearer {{otherMemberToken}}
+Content-Type: application/json
+
+{
+  "quantity": 2
+}
+
+> {%
+    client.test("不能修改其他会员的购物车", function () {
+        client.assert(response.status === 404);
+        client.assert(response.body.code === 40413);
+    });
+%}
+
+### 20. 会员B不能删除会员A的购物车
+DELETE {{baseUrl}}/api/members/me/cart/{{ownerCartItemId}}
+Authorization: Bearer {{otherMemberToken}}
+
+> {%
+    client.test("不能删除其他会员的购物车", function () {
+        client.assert(response.status === 404);
+        client.assert(response.body.code === 40413);
+    });
+%}
+
+### 21. 确认会员A的购物车项仍然存在
+GET {{baseUrl}}/api/members/me/cart
+Authorization: Bearer {{memberToken}}
+
+> {%
+    const targetId =
+        client.global.get("ownerCartItemId");
+
+    const item = response.body.data.find(
+        value => String(value.id) === targetId
+    );
+
+    client.test("越权操作没有影响会员A的数据", function () {
+        client.assert(item != null);
+        client.assert(item.quantity === 1);
+    });
+%}

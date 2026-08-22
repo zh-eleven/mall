@@ -3,7 +3,6 @@ package com.mall.config;
 import com.mall.security.JwtAuthenticationFilter;
 import com.mall.security.RestAccessDeniedHandler;
 import com.mall.security.RestAuthenticationEntryPoint;
-import com.mall.security.SecurityConstants;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -38,7 +37,20 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.OPTIONS, "/**")
                         .permitAll()
 
+                        .requestMatchers(
+                                HttpMethod.GET,
+                                "/api/products",
+                                "/api/products/**"
+                        )
+                        .permitAll()
+
                         .requestMatchers(SecurityConstants.WHITE_LIST)
+                        .permitAll()
+
+                        .requestMatchers(
+                                HttpMethod.GET,
+                                "/api/product-categories/tree"
+                        )
                         .permitAll()
 
                         .requestMatchers("/api/admin/**")
