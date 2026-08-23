@@ -1,0 +1,279 @@
+@baseUrl = http://localhost:8080
+@memberUsername = test003
+@memberPassword = 123456
+
+### 1. 未登录不能确认订单
+POST {{baseUrl}}/api/members/me/orders/preview
+Content-Type: application/json
+
+{
+  "addressId": 1
+}
+
+> {%
+    client.test("未登录确认订单返回401", function () {
+        client.assert(response.status === 401);
+        client.assert(response.body.code === 40100);
+    });
+%}
+
+### 2. 会员登录
+POST {{baseUrl}}/api/members/login
+Content-Type: application/json
+
+{
+  "username": "{{memberUsername}}",
+  "password": "{{memberPassword}}"
+}
+
+> {%
+    client.test("会员登录成功", function () {
+        client.assert(response.status === 200);
+        client.assert(response.body.code === 200);
+    });
+
+    client.global.set(
+        "memberToken",
+        response.body.data.token
+    );
+%}
+
+### 3. 创建临时收货地址
+POST {{baseUrl}}/api/members/me/addresses
+Authorization: Bearer {{memberToken}}
+Content-Type: application/json
+
+{
+  "name": "订单测试用户",
+  "phoneNumber": "13800000000",
+  "defaultStatus": 0,
+  "postCode": "100000",
+  "province": "北京市",
+  "city": "北京市",
+  "region": "海淀区",
+  "detailAddress": "测试路1号"
+}
+
+> {%
+    const address = response.body.data;
+
+    client.test("临时收货地址创建成功", function () {
+        client.assert(response.status === 200);
+        client.assert(response.body.code === 200);
+        client.assert(
+            address != null,
+            "创建地址没有返回数据"
+        );
+    });
+
+    if (address != null) {
+        client.global.set(
+            "orderAddressId",
+            String(address.id)
+        );
+    }
+%}
+
+### 3. 获取会员收货地址
+GET {{baseUrl}}/api/members/me/addresses
+Authorization: Bearer {{memberToken}}
+
+> {%
+    const addresses = response.body.data;
+
+    client.test("会员至少存在一个收货地址", function () {
+        client.assert(
+            Array.isArray(addresses),
+            "地址数据不是数组"
+        );
+
+        client.assert(
+            addresses.length > 0,
+            "请先为test003添加一个收货地址"
+        );
+    });
+
+    if (addresses.length > 0) {
+        client.global.set(
+            "orderAddressId",
+            String(addresses[0].id)
+        );
+    }
+%}
+
+### 4. 查询已上架商品
+GET {{baseUrl}}/api/products?pageNum=1&pageSize=100
+
+> {%
+    const products = response.body.data.list;
+
+    client.test("存在已上架商品", function () {
+        client.assert(products.length > 0);
+    });
+
+    if (products.length > 0) {
+        client.global.set(
+            "orderProductId",
+            String(products[0].id)
+        );
+    }
+%}
+
+### 5. 获取库存充足的SKU
+GET {{baseUrl}}/api/products/{{orderProductId}}
+
+> {%
+    const sku = response.body.data.skus.find(
+        item => item.availableStock >= 1
+    );
+
+    client.test("存在可结算的SKU", function () {
+        client.assert(
+            sku != null,
+            "请为测试商品准备至少1件可用库存"
+        );
+    });
+
+    if (sku != null) {
+        client.global.set(
+            "orderSkuId",
+            String(sku.id)
+        );
+    }
+%}
+
+### 6. 将商品加入购物车
+POST {{baseUrl}}/api/members/me/cart
+Authorization: Bearer {{memberToken}}
+Content-Type: application/json
+
+{
+  "skuId": {{orderSkuId}},
+  "quantity": 1
+}
+
+> {%
+    const item = response.body.data;
+
+    client.test("结算商品加入购物车成功", function () {
+        client.assert(response.status === 200);
+        client.assert(response.body.code === 200);
+        client.assert(item != null, "购物车数据不能为空");
+
+        if (item != null) {
+            client.assert(item.selected === true);
+        }
+    });
+
+    if (item != null) {
+        client.global.set(
+            "orderPreviewCartItemId",
+            String(item.id)
+        );
+
+        client.global.set(
+            "expectedOrderQuantity",
+            String(item.quantity)
+        );
+    }
+%}
+
+### 7. 生成确认订单信息
+POST {{baseUrl}}/api/members/me/orders/preview
+Authorization: Bearer {{memberToken}}
+Content-Type: application/json
+
+{
+  "addressId": {{orderAddressId}}
+}
+
+> {%
+    const data = response.body.data;
+    const skuId = client.global.get("orderSkuId");
+
+    const items = data != null
+    && Array.isArray(data.items)
+        ? data.items
+        : [];
+
+    const targetItem = items.find(
+        item => String(item.skuId) === skuId
+    );
+
+    client.test("确认订单生成成功", function () {
+        client.assert(response.status === 200);
+        client.assert(response.body.code === 200);
+        client.assert(data != null, "确认订单数据不能为空");
+
+        if (data == null) {
+            return;
+        }
+
+        client.assert(
+            data.receiver != null,
+            "收货地址不能为空"
+        );
+
+        client.assert(
+            String(data.receiver.addressId)
+            === client.global.get("orderAddressId"),
+            "返回的收货地址不正确"
+        );
+
+        client.assert(
+            targetItem != null,
+            "确认订单中缺少测试SKU"
+        );
+
+        if (targetItem != null) {
+            client.assert(
+                targetItem.quantity
+                === Number(
+                    client.global.get("expectedOrderQuantity")
+                ),
+                "确认订单商品数量不正确"
+            );
+        }
+
+        client.assert(
+            Number(data.totalAmount) > 0,
+            "订单总金额必须大于0"
+        );
+
+        client.assert(
+            Number(data.payAmount)
+            === Number(data.totalAmount),
+            "实付金额应等于总金额"
+        );
+    });
+%}
+
+### 8. 地址ID不能为空
+POST {{baseUrl}}/api/members/me/orders/preview
+Authorization: Bearer {{memberToken}}
+Content-Type: application/json
+
+{}
+
+> {%
+    client.test("缺少地址ID返回400", function () {
+        client.assert(response.status === 400);
+        client.assert(response.body.code === 40001);
+    });
+%}
+
+### 9. 不存在的地址不能确认订单
+POST {{baseUrl}}/api/members/me/orders/preview
+Authorization: Bearer {{memberToken}}
+Content-Type: application/json
+
+{
+  "addressId": 999999999
+}
+
+> {%
+    client.test("不存在的地址返回404", function () {
+        client.assert(response.status === 404);
+        client.assert(response.body.code === 40402);
+    });
+%}

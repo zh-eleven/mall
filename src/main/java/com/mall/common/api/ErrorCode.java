@@ -364,6 +364,12 @@ public enum ErrorCode implements IErrorCode {
             40413,
             "购物车商品不存在",
             HttpStatus.NOT_FOUND
+    ),
+
+    CART_NO_SELECTED_ITEMS(
+            40017,
+            "请选择需要结算的购物车商品",
+            HttpStatus.BAD_REQUEST
     );
 
 
