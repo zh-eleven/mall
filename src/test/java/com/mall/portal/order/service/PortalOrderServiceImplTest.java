@@ -4,8 +4,10 @@ import com.mall.common.api.ErrorCode;
 import com.mall.common.exception.BusinessException;
 import com.mall.member.entity.UmsMemberReceiveAddress;
 import com.mall.member.mapper.UmsMemberReceiveAddressMapper;
-import com.mall.portal.order.entity.OmsCartItem;
-import com.mall.portal.order.mapper.OmsCartItemMapper;
+import com.mall.order.entity.OmsCartItem;
+import com.mall.order.mapper.OmsCartItemMapper;
+import com.mall.order.mapper.OmsOrderItemMapper;
+import com.mall.order.mapper.OmsOrderMapper;
 import com.mall.portal.order.dto.OrderPreviewDTO;
 import com.mall.portal.order.service.impl.PortalOrderServiceImpl;
 import com.mall.product.entity.PmsProduct;
@@ -19,7 +21,13 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import com.mall.order.entity.OmsOrder;
+import com.mall.order.entity.OmsOrderItem;
+import com.mall.order.enums.OrderStatus;
+import com.mall.portal.order.dto.OrderSubmitDTO;
+import org.mockito.ArgumentCaptor;
 
+import java.time.LocalDateTime;
 import java.math.BigDecimal;
 import java.util.List;
 
@@ -36,10 +44,18 @@ class PortalOrderServiceImplTest {
         MybatisTestSupport.initializeTableInfo(
                 UmsMemberReceiveAddress.class,
                 OmsCartItem.class,
+                OmsOrder.class,
+                OmsOrderItem.class,
                 PmsProduct.class,
                 PmsSkuStock.class
         );
     }
+
+    @Mock
+    private OmsOrderMapper orderMapper;
+
+    @Mock
+    private OmsOrderItemMapper orderItemMapper;
 
     @Mock
     private UmsMemberReceiveAddressMapper addressMapper;
@@ -321,5 +337,533 @@ class PortalOrderServiceImplTest {
         sku.setSpecData("{}");
 
         return sku;
+    }
+    @Test
+    void submitShouldCreateOrderLockStockAndDeleteCartItems() {
+
+        stubPreviewData(
+                address(),
+                cartItem(),
+                product(),
+                sku()
+        );
+
+        when(skuStockMapper.lockStock(10L, 2))
+                .thenReturn(1);
+
+        when(orderMapper.insert(any(OmsOrder.class)))
+                .thenAnswer(invocation -> {
+                    OmsOrder order =
+                            invocation.getArgument(0);
+
+                    order.setId(500L);
+                    return 1;
+                });
+
+        when(orderItemMapper.insert(
+                any(OmsOrderItem.class)
+        )).thenReturn(1);
+
+        when(cartItemMapper.delete(any()))
+                .thenReturn(1);
+
+        var result = orderService.submit(
+                4L,
+                submitDTO()
+        );
+
+        assertEquals(500L, result.orderId());
+        assertEquals(0, result.status());
+        assertEquals(
+                new BigDecimal("198.00"),
+                result.payAmount()
+        );
+
+        verify(skuStockMapper).lockStock(
+                10L,
+                2
+        );
+
+        ArgumentCaptor<OmsOrder> orderCaptor =
+                ArgumentCaptor.forClass(
+                        OmsOrder.class
+                );
+
+        verify(orderMapper).insert(
+                orderCaptor.capture()
+        );
+
+        OmsOrder insertedOrder =
+                orderCaptor.getValue();
+
+        assertEquals(4L, insertedOrder.getMemberId());
+
+        assertSame(
+                OrderStatus.PENDING_PAYMENT,
+                insertedOrder.getStatus()
+        );
+
+        assertEquals(
+                new BigDecimal("198.00"),
+                insertedOrder.getTotalAmount()
+        );
+
+        assertEquals(
+                "测试备注",
+                insertedOrder.getNote()
+        );
+
+        assertFalse(
+                insertedOrder.getOrderSn().isBlank()
+        );
+
+        ArgumentCaptor<OmsOrderItem> itemCaptor =
+                ArgumentCaptor.forClass(
+                        OmsOrderItem.class
+                );
+
+        verify(orderItemMapper).insert(
+                itemCaptor.capture()
+        );
+
+        OmsOrderItem insertedItem =
+                itemCaptor.getValue();
+
+        assertEquals(500L, insertedItem.getOrderId());
+        assertEquals(20L, insertedItem.getProductId());
+        assertEquals(10L, insertedItem.getSkuId());
+        assertEquals(2, insertedItem.getQuantity());
+
+        assertEquals(
+                new BigDecimal("198.00"),
+                insertedItem.getSubtotal()
+        );
+
+        verify(cartItemMapper).delete(any());
+    }
+
+    @Test
+    void submitShouldRejectWhenAtomicStockLockFails() {
+
+        stubPreviewData(
+                address(),
+                cartItem(),
+                product(),
+                sku()
+        );
+
+        when(skuStockMapper.lockStock(10L, 2))
+                .thenReturn(0);
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> orderService.submit(
+                        4L,
+                        submitDTO()
+                )
+        );
+
+        assertSame(
+                ErrorCode.STOCK_INSUFFICIENT,
+                exception.getErrorCode()
+        );
+
+        verify(orderMapper, never())
+                .insert(any(OmsOrder.class));
+
+        verify(orderMapper, never())
+                .insert(any(OmsOrder.class));
+
+        verify(cartItemMapper, never())
+                .delete(any());
+    }
+
+    @Test
+    void cancelShouldUpdateStatusAndReleaseStock() {
+
+        OmsOrder pendingOrder = pendingOrder();
+        OmsOrder canceledOrder = pendingOrder();
+
+        canceledOrder.setStatus(
+                OrderStatus.CANCELED
+        );
+
+        canceledOrder.setCancelTime(
+                LocalDateTime.now()
+        );
+
+        when(orderMapper.selectOne(any()))
+                .thenReturn(
+                        pendingOrder,
+                        canceledOrder
+                );
+
+        when(orderMapper.cancelPendingOrder(
+                500L,
+                4L,
+                OrderStatus.PENDING_PAYMENT.getCode(),
+                OrderStatus.CANCELED.getCode()
+        )).thenReturn(1);
+
+        when(orderItemMapper.selectList(any()))
+                .thenReturn(
+                        List.of(orderItem())
+                );
+
+        when(skuStockMapper.releaseLockedStock(
+                10L,
+                2
+        )).thenReturn(1);
+
+        var result = orderService.cancel(
+                4L,
+                500L
+        );
+
+        assertEquals(4, result.status());
+        assertEquals("已取消", result.statusDescription());
+        assertNotNull(result.cancelTime());
+
+        verify(skuStockMapper).releaseLockedStock(
+                10L,
+                2
+        );
+
+        verify(orderItemMapper, times(2))
+                .selectList(any());
+    }
+
+   @Test
+    void cancelShouldRejectNonPendingOrder() {
+
+        OmsOrder order = pendingOrder();
+
+        order.setStatus(
+                OrderStatus.CANCELED
+        );
+
+        when(orderMapper.selectOne(any()))
+                .thenReturn(order);
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> orderService.cancel(
+                        4L,
+                        500L
+                )
+        );
+
+        assertSame(
+                ErrorCode.ORDER_STATUS_INVALID,
+                exception.getErrorCode()
+        );
+
+        verify(orderMapper, never())
+                .cancelPendingOrder(
+                        anyLong(),
+                        anyLong(),
+                        anyInt(),
+                        anyInt()
+                );
+
+        verifyNoInteractions(orderItemMapper);
+
+        verify(skuStockMapper, never())
+                .releaseLockedStock(
+                        anyLong(),
+                        anyInt()
+                );
+    }
+    @Test
+    void cancelShouldRejectOrderNotOwnedByMember() {
+
+        when(orderMapper.selectOne(any()))
+                .thenReturn(null);
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> orderService.cancel(
+                        4L,
+                        500L
+                )
+        );
+
+        assertSame(
+                ErrorCode.ORDER_NOT_FOUND,
+                exception.getErrorCode()
+        );
+
+        verify(orderMapper, never())
+                .cancelPendingOrder(
+                        anyLong(),
+                        anyLong(),
+                        anyInt(),
+                        anyInt()
+                );
+
+        verifyNoInteractions(orderItemMapper);
+    }
+
+    @Test
+    void payShouldUpdateStatusAndDeductLockedStock() {
+
+        OmsOrder pendingOrder = pendingOrder();
+        OmsOrder paidOrder = pendingOrder();
+
+        paidOrder.setStatus(
+                OrderStatus.PENDING_SHIPMENT
+        );
+
+        paidOrder.setPaymentTime(
+                LocalDateTime.now()
+        );
+
+        when(orderMapper.selectOne(any()))
+                .thenReturn(
+                        pendingOrder,
+                        paidOrder
+                );
+
+        when(orderItemMapper.selectList(any()))
+                .thenReturn(List.of(orderItem()));
+
+        when(orderMapper.payPendingOrder(
+                500L,
+                4L,
+                OrderStatus.PENDING_PAYMENT.getCode(),
+                OrderStatus.PENDING_SHIPMENT.getCode()
+        )).thenReturn(1);
+
+        when(skuStockMapper.deductLockedStock(
+                10L,
+                2
+        )).thenReturn(1);
+
+        var result = orderService.pay(
+                4L,
+                500L
+        );
+
+        assertEquals(1, result.status());
+        assertEquals("待发货", result.statusDescription());
+        assertNotNull(result.paymentTime());
+
+        verify(orderMapper).payPendingOrder(
+                500L,
+                4L,
+                OrderStatus.PENDING_PAYMENT.getCode(),
+                OrderStatus.PENDING_SHIPMENT.getCode()
+        );
+
+        verify(skuStockMapper).deductLockedStock(
+                10L,
+                2
+        );
+    }
+
+    @Test
+    void payShouldRejectNonPendingOrder() {
+
+        OmsOrder order = pendingOrder();
+
+        order.setStatus(
+                OrderStatus.PENDING_SHIPMENT
+        );
+
+        when(orderMapper.selectOne(any()))
+                .thenReturn(order);
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> orderService.pay(
+                        4L,
+                        500L
+                )
+        );
+
+        assertSame(
+                ErrorCode.ORDER_STATUS_INVALID,
+                exception.getErrorCode()
+        );
+
+        verify(orderMapper, never())
+                .payPendingOrder(
+                        anyLong(),
+                        anyLong(),
+                        anyInt(),
+                        anyInt()
+                );
+
+        verify(skuStockMapper, never())
+                .deductLockedStock(
+                        anyLong(),
+                        anyInt()
+                );
+    }
+
+    @Test
+    void payShouldRejectOrderNotOwnedByMember() {
+
+        when(orderMapper.selectOne(any()))
+                .thenReturn(null);
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> orderService.pay(
+                        4L,
+                        500L
+                )
+        );
+
+        assertSame(
+                ErrorCode.ORDER_NOT_FOUND,
+                exception.getErrorCode()
+        );
+
+        verify(orderMapper, never())
+                .payPendingOrder(
+                        anyLong(),
+                        anyLong(),
+                        anyInt(),
+                        anyInt()
+                );
+
+        verifyNoInteractions(orderItemMapper);
+    }
+
+    @Test
+    void payShouldRejectConcurrentStatusChange() {
+
+        when(orderMapper.selectOne(any()))
+                .thenReturn(pendingOrder());
+
+        when(orderItemMapper.selectList(any()))
+                .thenReturn(List.of(orderItem()));
+
+        when(orderMapper.payPendingOrder(
+                500L,
+                4L,
+                OrderStatus.PENDING_PAYMENT.getCode(),
+                OrderStatus.PENDING_SHIPMENT.getCode()
+        )).thenReturn(0);
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> orderService.pay(
+                        4L,
+                        500L
+                )
+        );
+
+        assertSame(
+                ErrorCode.ORDER_STATUS_INVALID,
+                exception.getErrorCode()
+        );
+
+        verify(skuStockMapper, never())
+                .deductLockedStock(
+                        anyLong(),
+                        anyInt()
+                );
+    }
+
+    @Test
+    void payShouldRejectInconsistentLockedStock() {
+
+        when(orderMapper.selectOne(any()))
+                .thenReturn(pendingOrder());
+
+        when(orderItemMapper.selectList(any()))
+                .thenReturn(List.of(orderItem()));
+
+        when(orderMapper.payPendingOrder(
+                500L,
+                4L,
+                OrderStatus.PENDING_PAYMENT.getCode(),
+                OrderStatus.PENDING_SHIPMENT.getCode()
+        )).thenReturn(1);
+
+        when(skuStockMapper.deductLockedStock(
+                10L,
+                2
+        )).thenReturn(0);
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> orderService.pay(
+                        4L,
+                        500L
+                )
+        );
+
+        assertSame(
+                ErrorCode.DATA_CONFLICT,
+                exception.getErrorCode()
+        );
+    }
+
+    private OrderSubmitDTO submitDTO() {
+        OrderSubmitDTO dto = new OrderSubmitDTO();
+
+        dto.setAddressId(30L);
+        dto.setNote("  测试备注  ");
+
+        return dto;
+    }
+
+    private OmsOrder pendingOrder() {
+        OmsOrder order = new OmsOrder();
+
+        order.setId(500L);
+        order.setOrderSn("TEST-ORDER");
+        order.setMemberId(4L);
+        order.setStatus(
+                OrderStatus.PENDING_PAYMENT
+        );
+
+        order.setTotalAmount(
+                new BigDecimal("198.00")
+        );
+
+        order.setPayAmount(
+                new BigDecimal("198.00")
+        );
+
+        order.setReceiverName("测试用户");
+        order.setReceiverPhone("13800000000");
+        order.setReceiverPostCode("100000");
+        order.setReceiverProvince("北京市");
+        order.setReceiverCity("北京市");
+        order.setReceiverRegion("海淀区");
+        order.setReceiverDetailAddress("测试路1号");
+        order.setCreateTime(LocalDateTime.now());
+
+        return order;
+    }
+
+    private OmsOrderItem orderItem() {
+        OmsOrderItem item = new OmsOrderItem();
+
+        item.setId(600L);
+        item.setOrderId(500L);
+        item.setOrderSn("TEST-ORDER");
+        item.setProductId(20L);
+        item.setSkuId(10L);
+        item.setSkuCode("TEST-SKU");
+        item.setProductName("测试商品");
+        item.setProductPic("product.jpg");
+        item.setSpecData("{}");
+
+        item.setProductPrice(
+                new BigDecimal("99.00")
+        );
+
+        item.setQuantity(2);
+
+        item.setSubtotal(
+                new BigDecimal("198.00")
+        );
+
+        return item;
     }
 }

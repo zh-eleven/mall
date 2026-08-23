@@ -1,7 +1,7 @@
 package com.mall.portal.cart.service;
 
-import com.mall.portal.order.entity.OmsCartItem;
-import com.mall.portal.order.mapper.OmsCartItemMapper;
+import com.mall.order.entity.OmsCartItem;
+import com.mall.order.mapper.OmsCartItemMapper;
 import com.mall.portal.cart.dto.CartItemAddDTO;
 import com.mall.portal.cart.service.impl.PortalCartServiceImpl;
 import com.mall.product.entity.PmsProduct;

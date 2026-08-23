@@ -1,0 +1,146 @@
+@baseUrl = http://localhost:8080
+@memberUsername = test003
+@memberPassword = 123456
+### 1. 会员登录
+POST {{baseUrl}}/api/members/login
+Content-Type: application/json
+
+{
+  "username": "{{memberUsername}}",
+  "password": "{{memberPassword}}"
+}
+
+> {%
+    const data = response.body && response.body.data;
+
+    client.test("会员登录成功", function () {
+        client.assert(response.status === 200,
+            "登录失败，HTTP状态码：" + response.status);
+        client.assert(response.body.code === 200,
+            "登录失败：" + response.body.message);
+        client.assert(data && data.token,
+            "登录响应中没有token");
+    });
+
+    if (response.status === 200 && data && data.token) {
+        client.global.set("memberToken", data.token);
+    }
+%}
+
+### 2. 查询全部订单，并找到刚提交的订单
+GET {{baseUrl}}/api/members/me/orders?pageNum=1&pageSize=100
+Authorization: Bearer {{memberToken}}
+
+> {%
+    client.test("查询全部订单成功", function () {
+        client.assert(response.status === 200, "HTTP状态码应为200");
+        client.assert(response.body.code === 200, "业务状态码应为200");
+
+        const page = response.body.data;
+        client.assert(page !== null, "分页数据不能为空");
+        client.assert(page.pageNum === 1, "当前页应为1");
+        client.assert(page.pageSize === 100, "每页数量应为100");
+        client.assert(Array.isArray(page.list), "订单列表应为数组");
+
+        const submittedOrderId = client.global.get("submittedOrderId");
+        client.assert(
+            submittedOrderId,
+            "请先运行 portal-order-submit.http 创建待支付订单"
+        );
+
+        const target = page.list.find(function (item) {
+            return String(item.orderId) === String(submittedOrderId);
+        });
+
+        client.assert(
+            target !== undefined,
+            "分页结果中应包含刚提交的订单"
+        );
+        client.assert(target.status === 0, "刚提交的订单应为待支付状态");
+        client.assert(target.itemCount > 0, "订单商品种类数应大于0");
+        client.assert(target.totalQuantity > 0, "订单商品总数量应大于0");
+        client.assert(Number(target.payAmount) > 0, "订单实付金额应大于0");
+        client.assert(target.firstProductName, "应包含首件商品名称");
+    });
+%}
+
+### 3. 按待支付状态筛选
+GET {{baseUrl}}/api/members/me/orders?status=0&pageNum=1&pageSize=100
+Authorization: Bearer {{memberToken}}
+
+> {%
+    client.test("待支付订单筛选成功", function () {
+        client.assert(response.status === 200, "HTTP状态码应为200");
+        client.assert(response.body.code === 200, "业务状态码应为200");
+
+        const list = response.body.data.list;
+        const submittedOrderId = client.global.get("submittedOrderId");
+
+        client.assert(Array.isArray(list), "订单列表应为数组");
+        client.assert(
+            list.every(function (item) {
+                return item.status === 0;
+            }),
+            "筛选结果应全部为待支付订单"
+        );
+
+        client.assert(
+            list.some(function (item) {
+                return String(item.orderId) === String(submittedOrderId);
+            }),
+            "筛选结果应包含刚提交的订单"
+        );
+    });
+%}
+
+### 4. 按已取消状态筛选
+GET {{baseUrl}}/api/members/me/orders?status=4&pageNum=1&pageSize=100
+Authorization: Bearer {{memberToken}}
+
+> {%
+    client.test("已取消订单筛选成功", function () {
+        client.assert(response.status === 200, "HTTP状态码应为200");
+        client.assert(response.body.code === 200, "业务状态码应为200");
+
+        const list = response.body.data.list;
+        client.assert(Array.isArray(list), "订单列表应为数组");
+        client.assert(
+            list.every(function (item) {
+                return item.status === 4;
+            }),
+            "筛选结果应全部为已取消订单"
+        );
+    });
+%}
+
+### 5. 非法订单状态
+GET {{baseUrl}}/api/members/me/orders?status=5&pageNum=1&pageSize=10
+Authorization: Bearer {{memberToken}}
+
+> {%
+    client.test("非法订单状态应被拒绝", function () {
+        client.assert(response.status === 400, "HTTP状态码应为400");
+        client.assert(response.body.code === 40001, "应返回参数校验错误");
+    });
+%}
+
+### 6. 非法分页大小
+GET {{baseUrl}}/api/members/me/orders?pageNum=1&pageSize=101
+Authorization: Bearer {{memberToken}}
+
+> {%
+    client.test("非法分页大小应被拒绝", function () {
+        client.assert(response.status === 400, "HTTP状态码应为400");
+        client.assert(response.body.code === 40001, "应返回参数校验错误");
+    });
+%}
+
+### 7. 未登录查询
+GET {{baseUrl}}/api/members/me/orders?pageNum=1&pageSize=10
+
+> {%
+    client.test("未登录查询应被拒绝", function () {
+        client.assert(response.status === 401, "HTTP状态码应为401");
+        client.assert(response.body.code === 40100, "应返回未认证错误");
+    });
+%}

@@ -1,4 +1,4 @@
-package com.mall.portal.order.enums;
+package com.mall.order.enums;
 
 import com.baomidou.mybatisplus.annotation.EnumValue;
 

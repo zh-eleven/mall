@@ -5,6 +5,13 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.mall.common.api.ErrorCode;
 import com.mall.common.api.PageResult;
 import com.mall.common.exception.BusinessException;
+import com.mall.order.entity.OmsOrder;
+import com.mall.order.mapper.OmsOrderItemMapper;
+import com.mall.order.mapper.OmsOrderMapper;
+import com.mall.portal.order.dto.OrderPreviewDTO;
+import com.mall.portal.order.dto.OrderSubmitDTO;
+import com.mall.portal.order.vo.OrderPreviewVO;
+import com.mall.portal.order.vo.OrderSubmitVO;
 import com.mall.portal.product.service.PortalProductService;
 import com.mall.portal.product.vo.*;
 import com.mall.product.entity.*;
@@ -30,6 +37,8 @@ public class PortalProductServiceImpl
     private final PmsProductAttributeMapper attributeMapper;
     private final PmsProductAttributeValueMapper attributeValueMapper;
     private final PmsProductCategoryMapper categoryMapper;
+    private final OmsOrderMapper orderMapper;
+    private final OmsOrderItemMapper orderItemMapper;
 
     @Override
     public PageResult<PortalProductSummaryVO> page(
@@ -231,4 +240,5 @@ public class PortalProductServiceImpl
                 )
                 .toList();
     }
+
 }

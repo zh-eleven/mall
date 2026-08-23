@@ -1,0 +1,217 @@
+@baseUrl = http://localhost:8080
+@memberUsername = test003
+@memberPassword = 123456
+
+### 1. 会员登录
+POST {{baseUrl}}/api/members/login
+Content-Type: application/json
+
+{
+  "username": "{{memberUsername}}",
+  "password": "{{memberPassword}}"
+}
+
+> {%
+    client.test("会员登录成功", function () {
+        client.assert(response.status === 200);
+        client.assert(response.body.code === 200);
+    });
+
+    client.global.set(
+        "memberToken",
+        response.body.data.token
+    );
+%}
+
+### 2. 创建临时收货地址
+POST {{baseUrl}}/api/members/me/addresses
+Authorization: Bearer {{memberToken}}
+Content-Type: application/json
+
+{
+  "name": "下单测试用户",
+  "phoneNumber": "13800000000",
+  "defaultStatus": 0,
+  "postCode": "100000",
+  "province": "北京市",
+  "city": "北京市",
+  "region": "海淀区",
+  "detailAddress": "下单测试路1号"
+}
+
+> {%
+    const address = response.body.data;
+
+    client.test("临时地址创建成功", function () {
+        client.assert(response.status === 200);
+        client.assert(response.body.code === 200);
+        client.assert(address != null);
+    });
+
+    if (address != null) {
+        client.global.set(
+            "submitAddressId",
+            String(address.id)
+        );
+    }
+%}
+
+### 3. 查询已上架商品
+GET {{baseUrl}}/api/products?pageNum=1&pageSize=100
+
+> {%
+    const products = response.body.data.list;
+
+    client.test("存在已上架商品", function () {
+        client.assert(products.length > 0);
+    });
+
+    if (products.length > 0) {
+        client.global.set(
+            "submitProductId",
+            String(products[0].id)
+        );
+    }
+%}
+
+### 4. 获取可下单的SKU
+GET {{baseUrl}}/api/products/{{submitProductId}}
+
+> {%
+    const sku = response.body.data.skus.find(
+        item => item.availableStock >= 1
+    );
+
+    client.test("存在库存充足的SKU", function () {
+        client.assert(sku != null);
+    });
+
+    if (sku != null) {
+        client.global.set(
+            "submitSkuId",
+            String(sku.id)
+        );
+
+        client.global.set(
+            "stockBeforeSubmit",
+            String(sku.availableStock)
+        );
+    }
+%}
+
+### 5. 加入购物车
+POST {{baseUrl}}/api/members/me/cart
+Authorization: Bearer {{memberToken}}
+Content-Type: application/json
+
+{
+  "skuId": {{submitSkuId}},
+  "quantity": 1
+}
+
+> {%
+    const item = response.body.data;
+
+    client.test("商品加入购物车成功", function () {
+        client.assert(response.status === 200);
+        client.assert(response.body.code === 200);
+        client.assert(item != null);
+    });
+
+    if (item != null) {
+        client.global.set(
+            "submitCartItemId",
+            String(item.id)
+        );
+
+        client.global.set(
+            "submitQuantity",
+            String(item.quantity)
+        );
+    }
+%}
+
+### 6. 提交订单
+POST {{baseUrl}}/api/members/me/orders
+Authorization: Bearer {{memberToken}}
+Content-Type: application/json
+
+{
+  "addressId": {{submitAddressId}},
+  "note": "HTTP测试订单"
+}
+
+> {%
+    const order = response.body.data;
+
+    client.test("订单提交成功", function () {
+        client.assert(response.status === 200);
+        client.assert(response.body.code === 200);
+        client.assert(order != null);
+
+        if (order != null) {
+            client.assert(order.orderId != null);
+            client.assert(order.orderSn != null);
+            client.assert(order.status === 0);
+            client.assert(order.statusDescription === "待支付");
+            client.assert(Number(order.payAmount) > 0);
+        }
+    });
+
+    if (order != null) {
+        client.global.set(
+            "submittedOrderId",
+            String(order.orderId)
+        );
+
+        client.global.set(
+            "submittedOrderSn",
+            String(order.orderSn)
+        );
+    }
+%}
+
+### 7. 已提交购物车项应被删除
+GET {{baseUrl}}/api/members/me/cart
+Authorization: Bearer {{memberToken}}
+
+> {%
+    const cartItemId =
+        client.global.get("submitCartItemId");
+
+    const item = response.body.data.find(
+        value => String(value.id) === cartItemId
+    );
+
+    client.test("已提交购物车项被删除", function () {
+        client.assert(item == null);
+    });
+%}
+
+### 8. 可用库存应减少
+GET {{baseUrl}}/api/products/{{submitProductId}}
+
+> {%
+    const skuId = client.global.get("submitSkuId");
+
+    const sku = response.body.data.skus.find(
+        item => String(item.id) === skuId
+    );
+
+    const expected =
+        Number(client.global.get("stockBeforeSubmit"))
+        - Number(client.global.get("submitQuantity"));
+
+    client.test("下单后库存被锁定", function () {
+        client.assert(sku != null);
+
+        if (sku != null) {
+            client.assert(
+                sku.availableStock === expected,
+                "预期可用库存：" + expected
+                + "，实际：" + sku.availableStock
+            );
+        }
+    });
+%}
+

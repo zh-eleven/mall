@@ -370,6 +370,17 @@ public enum ErrorCode implements IErrorCode {
             40017,
             "请选择需要结算的购物车商品",
             HttpStatus.BAD_REQUEST
+    ),
+    ORDER_NOT_FOUND(
+            40414,
+            "订单不存在",
+            HttpStatus.NOT_FOUND
+    ),
+
+    ORDER_STATUS_INVALID(
+            40932,
+            "当前订单状态不允许执行该操作",
+            HttpStatus.CONFLICT
     );
 
 

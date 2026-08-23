@@ -1,6 +1,8 @@
 package com.mall.portal.product.service;
 
 import com.mall.common.api.PageResult;
+import com.mall.portal.order.dto.OrderSubmitDTO;
+import com.mall.portal.order.vo.OrderSubmitVO;
 import com.mall.portal.product.vo.PortalProductCategoryVO;
 import com.mall.portal.product.vo.PortalProductDetailVO;
 import com.mall.portal.product.vo.PortalProductSummaryVO;
@@ -21,4 +23,6 @@ public interface PortalProductService {
 
 
     List<PortalProductCategoryVO> getCategoryTree();
+
+
 }

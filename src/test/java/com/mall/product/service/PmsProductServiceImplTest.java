@@ -11,9 +11,7 @@ import com.mall.product.dto.ProductUpdateDTO;
 import com.mall.product.entity.PmsBrand;
 import com.mall.product.entity.PmsProduct;
 import com.mall.product.entity.PmsProductCategory;
-import com.mall.product.mapper.PmsBrandMapper;
-import com.mall.product.mapper.PmsProductCategoryMapper;
-import com.mall.product.mapper.PmsProductMapper;
+import com.mall.product.mapper.*;
 import com.mall.product.service.impl.PmsProductServiceImpl;
 import com.mall.product.vo.ProductVO;
 import jakarta.validation.Validation;
@@ -35,10 +33,9 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
-import com.mall.product.mapper.PmsSkuStockMapper;
+
 import com.mall.product.entity.PmsProductAttributeValue;
 import com.mall.product.entity.PmsSkuStock;
-import com.mall.product.mapper.PmsProductAttributeValueMapper;
 
 @ExtendWith(MockitoExtension.class)
 class PmsProductServiceImplTest {

@@ -1,9 +1,9 @@
-package com.mall.portal.order.entity;
+package com.mall.order.entity;
 
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
-import com.mall.portal.order.enums.OrderStatus;
+import com.mall.order.enums.OrderStatus;
 import lombok.Data;
 
 import java.math.BigDecimal;

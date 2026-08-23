@@ -1,6 +1,6 @@
 package com.mall.portal.order.vo;
 
-import com.mall.portal.order.entity.OmsCartItem;
+import com.mall.order.entity.OmsCartItem;
 import com.mall.product.entity.PmsProduct;
 import com.mall.product.entity.PmsSkuStock;
 

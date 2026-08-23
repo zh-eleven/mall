@@ -1,0 +1,52 @@
+@baseUrl = http://localhost:8080
+@username = test003
+@password = 123456
+
+### 1. 登录会员账号
+POST {{baseUrl}}/api/members/login
+Content-Type: application/json
+
+{
+  "username": "{{username}}",
+  "password": "{{password}}"
+}
+
+> {%
+    client.global.set("memberToken", response.body.data.token);
+%}
+
+### 2. 查询待支付订单并记录第一条订单ID
+GET {{baseUrl}}/api/members/me/orders?status=0&pageNum=1&pageSize=10
+Authorization: Bearer {{memberToken}}
+
+> {%
+    client.test("存在可用于模拟支付的待支付订单", function () {
+        client.assert(response.status === 200, "查询失败");
+        client.assert(response.body.data.list.length > 0, "请先提交一个订单");
+    });
+    client.global.set("pendingOrderId", response.body.data.list[0].orderId);
+%}
+
+### 3. 模拟支付
+PATCH {{baseUrl}}/api/members/me/orders/{{pendingOrderId}}/pay
+Authorization: Bearer {{memberToken}}
+
+> {%
+    client.test("模拟支付成功并进入待发货", function () {
+        client.assert(response.status === 200, "支付请求失败");
+        client.assert(response.body.code === 200, "业务状态异常");
+        client.assert(response.body.data.status === 1, "订单未进入待发货状态");
+        client.assert(response.body.data.paymentTime != null, "未记录支付时间");
+    });
+%}
+
+### 4. 重复支付应被拒绝
+PATCH {{baseUrl}}/api/members/me/orders/{{pendingOrderId}}/pay
+Authorization: Bearer {{memberToken}}
+
+> {%
+    client.test("重复支付被拒绝", function () {
+        client.assert(response.status === 409, "重复支付应返回409");
+        client.assert(response.body.code === 40932, "错误码不正确");
+    });
+%}
