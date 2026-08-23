@@ -155,5 +155,24 @@ public class PortalOrderController {
         );
     }
 
+    @PatchMapping("/{orderId}/confirm-receipt")
+    public ApiResult<OrderDetailVO> confirmReceipt(
+            @AuthenticationPrincipal
+            MemberDetails memberDetails,
 
+            @PathVariable
+            @Positive(message = "订单ID必须大于0")
+            Long orderId) {
+
+        Long memberId =
+                memberDetails.getMember().getId();
+
+        return ApiResult.success(
+                orderService.confirmReceipt(
+                        memberId,
+                        orderId
+                ),
+                "确认收货成功"
+        );
+    }
 }
