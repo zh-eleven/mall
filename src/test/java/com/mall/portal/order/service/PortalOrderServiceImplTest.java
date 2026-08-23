@@ -8,6 +8,7 @@ import com.mall.order.entity.OmsCartItem;
 import com.mall.order.mapper.OmsCartItemMapper;
 import com.mall.order.mapper.OmsOrderItemMapper;
 import com.mall.order.mapper.OmsOrderMapper;
+import com.mall.order.service.OrderCancellationService;
 import com.mall.portal.order.dto.OrderPreviewDTO;
 import com.mall.portal.order.service.impl.PortalOrderServiceImpl;
 import com.mall.product.entity.PmsProduct;
@@ -68,6 +69,10 @@ class PortalOrderServiceImplTest {
 
     @Mock
     private PmsSkuStockMapper skuStockMapper;
+
+    @Mock
+    private OrderCancellationService
+            orderCancellationService;
 
     @InjectMocks
     private PortalOrderServiceImpl orderService;
@@ -479,9 +484,8 @@ class PortalOrderServiceImplTest {
     }
 
     @Test
-    void cancelShouldUpdateStatusAndReleaseStock() {
+    void cancelShouldReturnCanceledOrderDetail() {
 
-        OmsOrder pendingOrder = pendingOrder();
         OmsOrder canceledOrder = pendingOrder();
 
         canceledOrder.setStatus(
@@ -493,27 +497,12 @@ class PortalOrderServiceImplTest {
         );
 
         when(orderMapper.selectOne(any()))
-                .thenReturn(
-                        pendingOrder,
-                        canceledOrder
-                );
-
-        when(orderMapper.cancelPendingOrder(
-                500L,
-                4L,
-                OrderStatus.PENDING_PAYMENT.getCode(),
-                OrderStatus.CANCELED.getCode()
-        )).thenReturn(1);
+                .thenReturn(canceledOrder);
 
         when(orderItemMapper.selectList(any()))
                 .thenReturn(
                         List.of(orderItem())
                 );
-
-        when(skuStockMapper.releaseLockedStock(
-                10L,
-                2
-        )).thenReturn(1);
 
         var result = orderService.cancel(
                 4L,
@@ -524,26 +513,19 @@ class PortalOrderServiceImplTest {
         assertEquals("已取消", result.statusDescription());
         assertNotNull(result.cancelTime());
 
-        verify(skuStockMapper).releaseLockedStock(
-                10L,
-                2
+        verify(orderCancellationService).cancelByMember(
+                4L,
+                500L
         );
-
-        verify(orderItemMapper, times(2))
-                .selectList(any());
     }
 
-   @Test
-    void cancelShouldRejectNonPendingOrder() {
+    @Test
+    void cancelShouldPropagateInvalidStatus() {
 
-        OmsOrder order = pendingOrder();
-
-        order.setStatus(
-                OrderStatus.CANCELED
-        );
-
-        when(orderMapper.selectOne(any()))
-                .thenReturn(order);
+        doThrow(new BusinessException(
+                ErrorCode.ORDER_STATUS_INVALID
+        )).when(orderCancellationService)
+                .cancelByMember(4L, 500L);
 
         BusinessException exception = assertThrows(
                 BusinessException.class,
@@ -558,27 +540,16 @@ class PortalOrderServiceImplTest {
                 exception.getErrorCode()
         );
 
-        verify(orderMapper, never())
-                .cancelPendingOrder(
-                        anyLong(),
-                        anyLong(),
-                        anyInt(),
-                        anyInt()
-                );
-
         verifyNoInteractions(orderItemMapper);
-
-        verify(skuStockMapper, never())
-                .releaseLockedStock(
-                        anyLong(),
-                        anyInt()
-                );
     }
-    @Test
-    void cancelShouldRejectOrderNotOwnedByMember() {
 
-        when(orderMapper.selectOne(any()))
-                .thenReturn(null);
+    @Test
+    void cancelShouldPropagateOrderNotFound() {
+
+        doThrow(new BusinessException(
+                ErrorCode.ORDER_NOT_FOUND
+        )).when(orderCancellationService)
+                .cancelByMember(4L, 500L);
 
         BusinessException exception = assertThrows(
                 BusinessException.class,
@@ -592,14 +563,6 @@ class PortalOrderServiceImplTest {
                 ErrorCode.ORDER_NOT_FOUND,
                 exception.getErrorCode()
         );
-
-        verify(orderMapper, never())
-                .cancelPendingOrder(
-                        anyLong(),
-                        anyLong(),
-                        anyInt(),
-                        anyInt()
-                );
 
         verifyNoInteractions(orderItemMapper);
     }
@@ -798,6 +761,132 @@ class PortalOrderServiceImplTest {
 
         assertSame(
                 ErrorCode.DATA_CONFLICT,
+                exception.getErrorCode()
+        );
+    }
+
+    @Test
+    void confirmReceiptShouldCompleteShippedOrder() {
+
+        OmsOrder shippedOrder = pendingOrder();
+        shippedOrder.setStatus(OrderStatus.SHIPPED);
+
+        OmsOrder completedOrder = pendingOrder();
+        completedOrder.setStatus(OrderStatus.COMPLETED);
+        completedOrder.setReceiveTime(LocalDateTime.now());
+
+        when(orderMapper.selectOne(any()))
+                .thenReturn(shippedOrder, completedOrder);
+
+        when(orderMapper.confirmShippedOrder(
+                500L,
+                4L,
+                OrderStatus.SHIPPED.getCode(),
+                OrderStatus.COMPLETED.getCode()
+        )).thenReturn(1);
+
+        when(orderItemMapper.selectList(any()))
+                .thenReturn(List.of(orderItem()));
+
+        var result = orderService.confirmReceipt(
+                4L,
+                500L
+        );
+
+        assertEquals(3, result.status());
+        assertEquals("已完成", result.statusDescription());
+        assertNotNull(result.receiveTime());
+
+        verify(orderMapper).confirmShippedOrder(
+                500L,
+                4L,
+                OrderStatus.SHIPPED.getCode(),
+                OrderStatus.COMPLETED.getCode()
+        );
+    }
+
+    @Test
+    void confirmReceiptShouldRejectOrderNotOwnedByMember() {
+
+        when(orderMapper.selectOne(any()))
+                .thenReturn(null);
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> orderService.confirmReceipt(
+                        4L,
+                        500L
+                )
+        );
+
+        assertSame(
+                ErrorCode.ORDER_NOT_FOUND,
+                exception.getErrorCode()
+        );
+
+        verify(orderMapper, never())
+                .confirmShippedOrder(
+                        anyLong(),
+                        anyLong(),
+                        anyInt(),
+                        anyInt()
+                );
+    }
+
+    @Test
+    void confirmReceiptShouldRejectNonShippedOrder() {
+
+        when(orderMapper.selectOne(any()))
+                .thenReturn(pendingOrder());
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> orderService.confirmReceipt(
+                        4L,
+                        500L
+                )
+        );
+
+        assertSame(
+                ErrorCode.ORDER_STATUS_INVALID,
+                exception.getErrorCode()
+        );
+
+        verify(orderMapper, never())
+                .confirmShippedOrder(
+                        anyLong(),
+                        anyLong(),
+                        anyInt(),
+                        anyInt()
+                );
+    }
+
+    @Test
+    void confirmReceiptShouldRejectConcurrentStatusChange() {
+
+        OmsOrder shippedOrder = pendingOrder();
+        shippedOrder.setStatus(OrderStatus.SHIPPED);
+
+        when(orderMapper.selectOne(any()))
+                .thenReturn(shippedOrder);
+
+        when(orderMapper.confirmShippedOrder(
+                500L,
+                4L,
+                OrderStatus.SHIPPED.getCode(),
+                OrderStatus.COMPLETED.getCode()
+        )).thenReturn(0);
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> orderService.confirmReceipt(
+                        4L,
+                        500L
+                )
+        );
+
+        assertSame(
+                ErrorCode.ORDER_STATUS_INVALID,
                 exception.getErrorCode()
         );
     }

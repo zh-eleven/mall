@@ -1,0 +1,143 @@
+@baseUrl = http://localhost:8080
+@adminUsername = admin
+@adminPassword = 123456
+@memberUsername = test003
+@memberPassword = 123456
+
+### 1. 管理员登录
+POST {{baseUrl}}/api/admin/auth/login
+Content-Type: application/json
+
+{
+  "username": "{{adminUsername}}",
+  "password": "{{adminPassword}}"
+}
+
+> {%
+    client.test("管理员登录成功", function () {
+        client.assert(response.status === 200, "管理员登录失败");
+    });
+    client.global.set("adminToken", response.body.data.token);
+%}
+
+### 2. 会员登录
+POST {{baseUrl}}/api/members/login
+Content-Type: application/json
+
+{
+  "username": "{{memberUsername}}",
+  "password": "{{memberPassword}}"
+}
+
+> {%
+    client.test("会员登录成功", function () {
+        client.assert(response.status === 200, "会员登录失败");
+    });
+    client.global.set("memberToken", response.body.data.token);
+%}
+
+### 3. 获取当前会员ID
+GET {{baseUrl}}/api/members/me
+Authorization: Bearer {{memberToken}}
+
+> {%
+    client.global.set("memberId", response.body.data.id);
+%}
+
+### 4. 从会员自己的待发货订单中选一条
+GET {{baseUrl}}/api/members/me/orders?status=1&pageNum=1&pageSize=10
+Authorization: Bearer {{memberToken}}
+
+> {%
+    client.test("存在待发货订单", function () {
+        client.assert(response.status === 200, "订单查询失败");
+        client.assert(response.body.data.list.length > 0,
+            "请先提交订单并执行模拟支付");
+    });
+    const order = response.body.data.list[0];
+    client.global.set("lifecycleOrderId", order.orderId);
+    client.global.set("lifecycleOrderSn", order.orderSn);
+%}
+
+### 5. 后台按订单号、会员、状态分页查询
+GET {{baseUrl}}/api/admin/orders?orderSn={{lifecycleOrderSn}}&memberId={{memberId}}&status=1&pageNum=1&pageSize=10
+Authorization: Bearer {{adminToken}}
+
+> {%
+    client.test("后台订单分页成功", function () {
+        client.assert(response.status === 200, "后台订单查询失败");
+        client.assert(response.body.data.list.length === 1, "目标订单数量异常");
+    });
+%}
+
+### 6. 后台订单详情
+GET {{baseUrl}}/api/admin/orders/{{lifecycleOrderId}}
+Authorization: Bearer {{adminToken}}
+
+> {%
+    client.test("后台订单详情完整", function () {
+        client.assert(response.status === 200, "详情查询失败");
+        client.assert(response.body.data.items.length > 0, "订单项为空");
+        client.assert(response.body.data.receiver != null, "收货地址为空");
+        client.assert(response.body.data.delivery != null, "配送信息为空");
+    });
+%}
+
+### 7. 后台发货
+PATCH {{baseUrl}}/api/admin/orders/{{lifecycleOrderId}}/ship
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "deliveryCompany": "顺丰速运",
+  "deliverySn": "SF{{$timestamp}}"
+}
+
+> {%
+    client.test("发货成功", function () {
+        client.assert(response.status === 200, "发货失败");
+        client.assert(response.body.data.status === 2, "订单未变为已发货");
+        client.assert(response.body.data.delivery.deliveryTime != null,
+            "未记录发货时间");
+    });
+%}
+
+### 8. 重复发货属于非法状态
+PATCH {{baseUrl}}/api/admin/orders/{{lifecycleOrderId}}/ship
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "deliveryCompany": "顺丰速运",
+  "deliverySn": "SF-REPEAT"
+}
+
+> {%
+    client.test("重复发货被拒绝", function () {
+        client.assert(response.status === 409, "重复发货应返回409");
+        client.assert(response.body.code === 40932, "错误码不正确");
+    });
+%}
+
+### 9. 当前会员确认收货
+PATCH {{baseUrl}}/api/members/me/orders/{{lifecycleOrderId}}/confirm-receipt
+Authorization: Bearer {{memberToken}}
+
+> {%
+    client.test("确认收货成功", function () {
+        client.assert(response.status === 200, "确认收货失败");
+        client.assert(response.body.data.status === 3, "订单未完成");
+        client.assert(response.body.data.receiveTime != null, "未记录收货时间");
+    });
+%}
+
+### 10. 重复确认收货属于非法状态
+PATCH {{baseUrl}}/api/members/me/orders/{{lifecycleOrderId}}/confirm-receipt
+Authorization: Bearer {{memberToken}}
+
+> {%
+    client.test("重复确认收货被拒绝", function () {
+        client.assert(response.status === 409, "重复确认应返回409");
+        client.assert(response.body.code === 40932, "错误码不正确");
+    });
+%}

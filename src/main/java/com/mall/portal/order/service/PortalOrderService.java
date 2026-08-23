@@ -37,4 +37,9 @@ public interface PortalOrderService {
     );
 
     OrderDetailVO pay(Long memberId, Long orderId);
+
+    OrderDetailVO confirmReceipt(
+            Long memberId,
+            Long orderId
+    );
 }

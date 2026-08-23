@@ -61,6 +61,10 @@ public class OmsOrder {
 
     private LocalDateTime paymentTime;
 
+    private String deliveryCompany;
+
+    private String deliverySn;
+
     private LocalDateTime deliveryTime;
 
     private LocalDateTime receiveTime;

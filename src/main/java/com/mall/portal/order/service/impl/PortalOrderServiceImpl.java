@@ -24,6 +24,7 @@ import com.mall.order.entity.OmsOrderItem;
 import com.mall.order.enums.OrderStatus;
 import com.mall.order.mapper.OmsOrderItemMapper;
 import com.mall.order.mapper.OmsOrderMapper;
+import com.mall.order.service.OrderCancellationService;
 import com.mall.portal.order.dto.OrderSubmitDTO;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.util.StringUtils;
@@ -46,6 +47,9 @@ public class PortalOrderServiceImpl
     private final PmsSkuStockMapper skuStockMapper;
     private final OmsOrderMapper orderMapper;
     private final OmsOrderItemMapper orderItemMapper;
+
+    private final OrderCancellationService
+            orderCancellationService;
 
 
     @Override
@@ -502,36 +506,10 @@ public class PortalOrderServiceImpl
             Long memberId,
             Long orderId) {
 
-        OmsOrder order = findOwnedOrder(
+        orderCancellationService.cancelByMember(
                 memberId,
                 orderId
         );
-
-        if (!OrderStatus.PENDING_PAYMENT.equals(
-                order.getStatus()
-        )) {
-            throw new BusinessException(
-                    ErrorCode.ORDER_STATUS_INVALID
-            );
-        }
-
-        int updated = orderMapper.cancelPendingOrder(
-                orderId,
-                memberId,
-                OrderStatus.PENDING_PAYMENT.getCode(),
-                OrderStatus.CANCELED.getCode()
-        );
-
-        if (updated != 1) {
-            throw new BusinessException(
-                    ErrorCode.ORDER_STATUS_INVALID
-            );
-        }
-
-        List<OmsOrderItem> items =
-                findOrderItems(orderId);
-
-        releaseLockedStocks(items);
 
         return getDetail(
                 memberId,
@@ -586,25 +564,6 @@ public class PortalOrderServiceImpl
         }
 
         return items;
-    }
-
-    private void releaseLockedStocks(
-            List<OmsOrderItem> items) {
-
-        for (OmsOrderItem item : items) {
-
-            int updated =
-                    skuStockMapper.releaseLockedStock(
-                            item.getSkuId(),
-                            item.getQuantity()
-                    );
-
-            if (updated != 1) {
-                throw new BusinessException(
-                        ErrorCode.DATA_CONFLICT
-                );
-            }
-        }
     }
 
     @Override
@@ -740,6 +699,44 @@ public class PortalOrderServiceImpl
                 );
             }
         }
+    }
+
+    @Override
+    @Transactional
+    public OrderDetailVO confirmReceipt(
+            Long memberId,
+            Long orderId) {
+
+        OmsOrder order = findOwnedOrder(
+                memberId,
+                orderId
+        );
+
+        if (!OrderStatus.SHIPPED.equals(
+                order.getStatus()
+        )) {
+            throw new BusinessException(
+                    ErrorCode.ORDER_STATUS_INVALID
+            );
+        }
+
+        int updated = orderMapper.confirmShippedOrder(
+                orderId,
+                memberId,
+                OrderStatus.SHIPPED.getCode(),
+                OrderStatus.COMPLETED.getCode()
+        );
+
+        if (updated != 1) {
+            throw new BusinessException(
+                    ErrorCode.ORDER_STATUS_INVALID
+            );
+        }
+
+        return getDetail(
+                memberId,
+                orderId
+        );
     }
 
 }
