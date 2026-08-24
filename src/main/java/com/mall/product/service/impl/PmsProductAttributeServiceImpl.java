@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.mall.common.api.ErrorCode;
 import com.mall.common.api.PageResult;
+import com.mall.common.cache.CacheNames;
 import com.mall.common.exception.BusinessException;
 import com.mall.product.dto.ProductAttributeCreateDTO;
 import com.mall.product.dto.ProductAttributeUpdateDTO;
@@ -17,6 +18,7 @@ import com.mall.product.vo.ProductAttributeVO;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.DuplicateKeyException;
+import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -136,6 +138,10 @@ public class PmsProductAttributeServiceImpl
 
     @Override
     @Transactional
+    @CacheEvict(
+            cacheNames = CacheNames.PORTAL_PRODUCT_DETAIL,
+            allEntries = true
+    )
     public ProductAttributeVO update(
             Long attributeId,
             ProductAttributeUpdateDTO dto) {

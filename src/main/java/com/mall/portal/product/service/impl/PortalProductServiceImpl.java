@@ -9,6 +9,7 @@ import com.mall.common.exception.BusinessException;
 import com.mall.order.mapper.OmsOrderItemMapper;
 import com.mall.order.mapper.OmsOrderMapper;
 import org.springframework.cache.annotation.Cacheable;
+import com.mall.portal.product.service.PortalProductDetailCacheService;
 import com.mall.portal.product.service.PortalProductService;
 import com.mall.portal.product.vo.*;
 import com.mall.product.entity.*;
@@ -18,9 +19,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 
 @Service
@@ -31,11 +33,10 @@ public class PortalProductServiceImpl
 
     private final PmsProductMapper productMapper;
     private final PmsSkuStockMapper skuStockMapper;
-    private final PmsProductAttributeMapper attributeMapper;
-    private final PmsProductAttributeValueMapper attributeValueMapper;
     private final PmsProductCategoryMapper categoryMapper;
     private final OmsOrderMapper orderMapper;
     private final OmsOrderItemMapper orderItemMapper;
+    private final PortalProductDetailCacheService detailCacheService;
 
     @Override
     public PageResult<PortalProductSummaryVO> page(
@@ -91,103 +92,86 @@ public class PortalProductServiceImpl
     public PortalProductDetailVO getDetail(
             Long productId) {
 
-        PmsProduct product =
-                findPublishedProduct(productId);
+        PortalProductDetailCacheVO detail =
+                detailCacheService.getStaticDetail(productId);
 
-        List<PmsProductAttributeValue> attributeValues =
-                attributeValueMapper.selectList(
-                        new LambdaQueryWrapper<
-                                PmsProductAttributeValue>()
-                                .eq(
-                                        PmsProductAttributeValue
-                                                ::getProductId,
-                                        productId
-                                )
-                                .orderByAsc(
-                                        PmsProductAttributeValue
-                                                ::getProductAttributeId
-                                )
-                );
-
-        Map<Long, PmsProductAttribute> attributeMap =
-                findAttributeMap(attributeValues);
-
-        List<PortalProductAttributeVO> attributes =
-                attributeValues.stream()
-                        .filter(value -> attributeMap.containsKey(
-                                value.getProductAttributeId()
-                        ))
-                        .map(value ->
-                                PortalProductAttributeVO.from(
-                                        attributeMap.get(
-                                                value.getProductAttributeId()
-                                        ),
-                                        value
-                                )
+        List<PmsSkuStock> stockRows = skuStockMapper.selectList(
+                new LambdaQueryWrapper<PmsSkuStock>()
+                        .select(
+                                PmsSkuStock::getId,
+                                PmsSkuStock::getStock,
+                                PmsSkuStock::getLockedStock
                         )
-                        .toList();
+                        .eq(PmsSkuStock::getProductId, productId)
+                        .orderByAsc(PmsSkuStock::getId)
+        );
 
-        List<PortalSkuVO> skus =
-                skuStockMapper.selectList(
-                                new LambdaQueryWrapper<
-                                        PmsSkuStock>()
-                                        .eq(
-                                                PmsSkuStock::getProductId,
-                                                productId
-                                        )
-                                        .orderByAsc(PmsSkuStock::getId)
-                        )
-                        .stream()
-                        .map(PortalSkuVO::from)
-                        .toList();
+        List<PortalSkuVO> skus = mergeCurrentStock(
+                detail.skus(),
+                stockRows
+        );
 
         return PortalProductDetailVO.from(
-                product,
-                attributes,
+                detail,
                 skus
         );
     }
 
-    private PmsProduct findPublishedProduct(
-            Long productId) {
+    private List<PortalSkuVO> mergeCurrentStock(
+            List<PortalSkuCacheVO> cachedSkus,
+            List<PmsSkuStock> stockRows) {
 
-        PmsProduct product = productMapper.selectOne(
-                new LambdaQueryWrapper<PmsProduct>()
-                        .eq(PmsProduct::getId, productId)
-                        .eq(PmsProduct::getPublishStatus, 1)
-        );
+        Map<Long, PmsSkuStock> stockBySkuId = new HashMap<>();
 
-        if (product == null) {
+        for (PmsSkuStock stockRow : stockRows) {
+            if (stockRow.getId() == null
+                    || stockRow.getStock() == null
+                    || stockRow.getLockedStock() == null
+                    || stockBySkuId.put(
+                    stockRow.getId(),
+                    stockRow
+            ) != null) {
+                throw new BusinessException(
+                        ErrorCode.DATA_CONFLICT
+                );
+            }
+        }
+
+        if (stockBySkuId.size() != cachedSkus.size()) {
             throw new BusinessException(
-                    ErrorCode.PRODUCT_NOT_FOUND
+                    ErrorCode.DATA_CONFLICT
             );
         }
 
-        return product;
-    }
+        List<PortalSkuVO> result = new ArrayList<>(
+                cachedSkus.size()
+        );
 
-    private Map<Long, PmsProductAttribute>
-    findAttributeMap(
-            List<PmsProductAttributeValue> values) {
+        for (PortalSkuCacheVO cachedSku : cachedSkus) {
+            PmsSkuStock stockRow = cachedSku.id() == null
+                    ? null
+                    : stockBySkuId.remove(cachedSku.id());
 
-        if (values.isEmpty()) {
-            return Map.of();
+            if (stockRow == null) {
+                throw new BusinessException(
+                        ErrorCode.DATA_CONFLICT
+                );
+            }
+
+            result.add(PortalSkuVO.from(
+                    cachedSku,
+                    stockRow.getStock(),
+                    stockRow.getLockedStock()
+            ));
         }
 
-        List<Long> attributeIds = values.stream()
-                .map(
-                        PmsProductAttributeValue
-                                ::getProductAttributeId
-                )
-                .distinct()
-                .toList();
+        if (!stockBySkuId.isEmpty()) {
+            throw new BusinessException(
+                    ErrorCode.DATA_CONFLICT
+            );
+        }
 
-        return attributeMapper.selectBatchIds(attributeIds)
-                .stream()
-                .collect(Collectors.toMap(
-                        PmsProductAttribute::getId,
-                        Function.identity()
-                ));
+        return List.copyOf(result);
     }
 
     @Override

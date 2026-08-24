@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.mall.common.api.ErrorCode;
 import com.mall.common.api.PageResult;
+import com.mall.common.cache.CacheNames;
 import com.mall.common.exception.BusinessException;
 import com.mall.product.dto.ProductCreateDTO;
 import com.mall.product.dto.ProductUpdateDTO;
@@ -16,6 +17,7 @@ import com.mall.product.service.PmsProductService;
 import com.mall.product.vo.ProductVO;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DuplicateKeyException;
+import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -149,6 +151,10 @@ public class PmsProductServiceImpl implements PmsProductService {
 
     @Override
     @Transactional
+    @CacheEvict(
+            cacheNames = CacheNames.PORTAL_PRODUCT_DETAIL,
+            key = "#productId"
+    )
     public ProductVO update(
             Long productId,
             ProductUpdateDTO dto) {
@@ -334,6 +340,10 @@ public class PmsProductServiceImpl implements PmsProductService {
 
     @Override
     @Transactional
+    @CacheEvict(
+            cacheNames = CacheNames.PORTAL_PRODUCT_DETAIL,
+            key = "#productId"
+    )
     public ProductVO updatePublishStatus(
             Long productId,
             Integer publishStatus) {
@@ -390,6 +400,10 @@ public class PmsProductServiceImpl implements PmsProductService {
 
     @Override
     @Transactional
+    @CacheEvict(
+            cacheNames = CacheNames.PORTAL_PRODUCT_DETAIL,
+            key = "#productId"
+    )
     public void delete(Long productId) {
         PmsProduct product = findById(productId);
 

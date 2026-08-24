@@ -2,6 +2,7 @@ package com.mall.product.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.mall.common.api.ErrorCode;
+import com.mall.common.cache.CacheNames;
 import com.mall.common.exception.BusinessException;
 import com.mall.product.dto.ProductAttributeValueItemDTO;
 import com.mall.product.entity.PmsProduct;
@@ -14,6 +15,7 @@ import com.mall.product.service.PmsProductAttributeValueService;
 import com.mall.product.vo.ProductAttributeValueVO;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -57,6 +59,10 @@ public class PmsProductAttributeValueServiceImpl
 
     @Override
     @Transactional
+    @CacheEvict(
+            cacheNames = CacheNames.PORTAL_PRODUCT_DETAIL,
+            key = "#productId"
+    )
     public List<ProductAttributeValueVO> replace(
             Long productId,
             List<ProductAttributeValueItemDTO> values) {

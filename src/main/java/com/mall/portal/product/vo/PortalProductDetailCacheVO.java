@@ -6,7 +6,7 @@ import java.math.BigDecimal;
 import java.util.Arrays;
 import java.util.List;
 
-public record PortalProductDetailVO(
+public record PortalProductDetailCacheVO(
         Long id,
         Long brandId,
         Long productCategoryId,
@@ -22,15 +22,27 @@ public record PortalProductDetailVO(
         String detailDesc,
         String detailHtml,
         List<PortalProductAttributeVO> attributes,
-        List<PortalSkuVO> skus
+        List<PortalSkuCacheVO> skus
 ) {
 
-    public static PortalProductDetailVO from(
+    public PortalProductDetailCacheVO {
+        albumPics = albumPics == null
+                ? List.of()
+                : List.copyOf(albumPics);
+        attributes = attributes == null
+                ? List.of()
+                : List.copyOf(attributes);
+        skus = skus == null
+                ? List.of()
+                : List.copyOf(skus);
+    }
+
+    public static PortalProductDetailCacheVO from(
             PmsProduct product,
             List<PortalProductAttributeVO> attributes,
-            List<PortalSkuVO> skus) {
+            List<PortalSkuCacheVO> skus) {
 
-        return new PortalProductDetailVO(
+        return new PortalProductDetailCacheVO(
                 product.getId(),
                 product.getBrandId(),
                 product.getProductCategoryId(),
@@ -45,38 +57,12 @@ public record PortalProductDetailVO(
                 product.getDetailTitle(),
                 product.getDetailDesc(),
                 product.getDetailHtml(),
-                List.copyOf(attributes),
-                List.copyOf(skus)
+                attributes,
+                skus
         );
     }
 
-    public static PortalProductDetailVO from(
-            PortalProductDetailCacheVO detail,
-            List<PortalSkuVO> skus) {
-
-        return new PortalProductDetailVO(
-                detail.id(),
-                detail.brandId(),
-                detail.productCategoryId(),
-                detail.name(),
-                detail.subTitle(),
-                detail.price(),
-                detail.originalPrice(),
-                detail.unit(),
-                detail.pic(),
-                detail.albumPics(),
-                detail.description(),
-                detail.detailTitle(),
-                detail.detailDesc(),
-                detail.detailHtml(),
-                detail.attributes(),
-                List.copyOf(skus)
-        );
-    }
-
-    private static List<String> parseAlbumPics(
-            String albumPics) {
-
+    private static List<String> parseAlbumPics(String albumPics) {
         if (albumPics == null || albumPics.isBlank()) {
             return List.of();
         }

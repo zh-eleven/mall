@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.mall.common.api.ErrorCode;
+import com.mall.common.cache.CacheNames;
 import com.mall.common.exception.BusinessException;
 import com.mall.product.dto.SkuSpecItemDTO;
 import com.mall.product.dto.SkuStockItemDTO;
@@ -14,6 +15,7 @@ import com.mall.product.service.PmsSkuStockService;
 import com.mall.product.vo.SkuStockVO;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DuplicateKeyException;
+import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -52,6 +54,10 @@ public class PmsSkuStockServiceImpl
 
     @Override
     @Transactional
+    @CacheEvict(
+            cacheNames = CacheNames.PORTAL_PRODUCT_DETAIL,
+            key = "#productId"
+    )
     public List<SkuStockVO> replace(
             Long productId,
             List<SkuStockItemDTO> skus) {

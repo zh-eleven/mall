@@ -23,6 +23,7 @@ spring:
     type: redis
     cache-names:
       - portalCategoryTree
+      - portalProductDetail
 
 mybatis-plus:
   configuration:

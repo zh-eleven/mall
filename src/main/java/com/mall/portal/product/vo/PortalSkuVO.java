@@ -27,4 +27,23 @@ public record PortalSkuVO(
                 sku.getSpecData()
         );
     }
+
+    public static PortalSkuVO from(
+            PortalSkuCacheVO sku,
+            int stock,
+            int lockedStock) {
+
+        int availableStock = Math.max(
+                stock - lockedStock,
+                0
+        );
+
+        return new PortalSkuVO(
+                sku.id(),
+                sku.price(),
+                availableStock,
+                sku.pic(),
+                sku.specData()
+        );
+    }
 }
