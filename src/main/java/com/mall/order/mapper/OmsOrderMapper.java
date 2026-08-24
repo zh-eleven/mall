@@ -126,4 +126,48 @@ public interface OmsOrderMapper
             @Param("canceledStatus") Integer canceledStatus,
             @Param("cutoffTime") LocalDateTime cutoffTime
     );
+
+    /**
+     * 会员申请退款时，与后台发货竞争同一个待发货状态。
+     */
+    @Update("""
+            UPDATE oms_order
+            SET status = #{refundingStatus},
+                update_time = CURRENT_TIMESTAMP
+            WHERE id = #{orderId}
+              AND member_id = #{memberId}
+              AND status = #{pendingShipmentStatus}
+            """)
+    int markRefunding(
+            @Param("orderId") Long orderId,
+            @Param("memberId") Long memberId,
+            @Param("pendingShipmentStatus") Integer pendingShipmentStatus,
+            @Param("refundingStatus") Integer refundingStatus
+    );
+
+    @Update("""
+            UPDATE oms_order
+            SET status = #{refundedStatus},
+                update_time = CURRENT_TIMESTAMP
+            WHERE id = #{orderId}
+              AND status = #{refundingStatus}
+            """)
+    int markRefunded(
+            @Param("orderId") Long orderId,
+            @Param("refundingStatus") Integer refundingStatus,
+            @Param("refundedStatus") Integer refundedStatus
+    );
+
+    @Update("""
+            UPDATE oms_order
+            SET status = #{pendingShipmentStatus},
+                update_time = CURRENT_TIMESTAMP
+            WHERE id = #{orderId}
+              AND status = #{refundingStatus}
+            """)
+    int restorePendingShipment(
+            @Param("orderId") Long orderId,
+            @Param("refundingStatus") Integer refundingStatus,
+            @Param("pendingShipmentStatus") Integer pendingShipmentStatus
+    );
 }

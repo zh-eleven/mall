@@ -130,7 +130,7 @@ public class PortalOrderController {
 
             @RequestParam(required = false)
             @Min(value = 0, message = "订单状态不能小于0")
-            @Max(value = 4, message = "订单状态不能大于4")
+            @Max(value = 6, message = "订单状态不能大于6")
             Integer status,
 
             @RequestParam(defaultValue = "1")

@@ -381,6 +381,36 @@ public enum ErrorCode implements IErrorCode {
             40932,
             "当前订单状态不允许执行该操作",
             HttpStatus.CONFLICT
+    ),
+    MEMBER_STATUS_INVALID(
+            40018,
+            "会员状态值无效",
+            HttpStatus.BAD_REQUEST
+    ),
+    MEMBER_CONCURRENT_OPERATION(
+            40933,
+            "会员状态已被其他操作修改",
+            HttpStatus.CONFLICT
+    ),
+    REFUND_NOT_FOUND(
+            40415,
+            "退款申请不存在",
+            HttpStatus.NOT_FOUND
+    ),
+    REFUND_NOT_ALLOWED(
+            40934,
+            "当前订单不允许申请退款",
+            HttpStatus.CONFLICT
+    ),
+    REFUND_STATUS_INVALID(
+            40935,
+            "当前退款状态不允许执行该操作",
+            HttpStatus.CONFLICT
+    ),
+    REFUND_CONCURRENT_OPERATION(
+            40936,
+            "退款申请已被其他操作处理",
+            HttpStatus.CONFLICT
     );
 
 

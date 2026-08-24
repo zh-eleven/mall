@@ -2,25 +2,18 @@ package com.mall.order.enums;
 
 import com.baomidou.mybatisplus.annotation.EnumValue;
 
-public enum OrderStatus {
+public enum RefundStatus {
 
-    PENDING_PAYMENT(0, "待支付"),
-    PENDING_SHIPMENT(1, "待发货"),
-    SHIPPED(2, "已发货"),
-    COMPLETED(3, "已完成"),
-    CANCELED(4, "已取消"),
-    REFUNDING(5, "退款处理中"),
-    REFUNDED(6, "已退款");
+    APPLYING(0, "待审核"),
+    COMPLETED(1, "已退款"),
+    REJECTED(2, "已拒绝");
 
-    /**
-     * 写入数据库的值。
-     */
     @EnumValue
     private final int code;
 
     private final String description;
 
-    OrderStatus(int code, String description) {
+    RefundStatus(int code, String description) {
         this.code = code;
         this.description = description;
     }

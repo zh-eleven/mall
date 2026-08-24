@@ -67,4 +67,19 @@ public interface PmsSkuStockMapper
             @Param("skuId") Long skuId,
             @Param("quantity") Integer quantity
     );
+
+    /**
+     * 已支付订单退款通过后恢复实际库存。
+     */
+    @Update("""
+            UPDATE pms_sku_stock
+            SET stock = stock + #{quantity},
+                update_time = CURRENT_TIMESTAMP
+            WHERE id = #{skuId}
+              AND #{quantity} > 0
+            """)
+    int restoreStock(
+            @Param("skuId") Long skuId,
+            @Param("quantity") Integer quantity
+    );
 }

@@ -1,0 +1,290 @@
+@baseUrl = http://localhost:8080
+@adminUsername = admin
+@adminPassword = 123456
+@memberUsername = test003
+@memberPassword = 123456
+
+### 1. 管理员登录
+POST {{baseUrl}}/api/admin/auth/login
+Content-Type: application/json
+
+{
+  "username": "{{adminUsername}}",
+  "password": "{{adminPassword}}"
+}
+
+> {%
+    client.test("管理员登录成功", function () {
+        client.assert(response.status === 200);
+    });
+    client.global.set("refundAdminToken", response.body.data.token);
+%}
+
+### 2. 会员登录
+POST {{baseUrl}}/api/members/login
+Content-Type: application/json
+
+{
+  "username": "{{memberUsername}}",
+  "password": "{{memberPassword}}"
+}
+
+> {%
+    client.test("会员登录成功", function () {
+        client.assert(response.status === 200);
+    });
+    client.global.set("refundMemberToken", response.body.data.token);
+%}
+
+### 3. 创建本次流程的收货地址
+POST {{baseUrl}}/api/members/me/addresses
+Authorization: Bearer {{refundMemberToken}}
+Content-Type: application/json
+
+{
+  "name": "退款测试用户",
+  "phoneNumber": "13800000000",
+  "defaultStatus": 0,
+  "postCode": "100000",
+  "province": "北京市",
+  "city": "北京市",
+  "region": "海淀区",
+  "detailAddress": "退款测试路1号"
+}
+
+> {%
+    client.test("退款流程地址创建成功", function () {
+        client.assert(response.status === 200);
+    });
+    client.global.set("refundAddressId", response.body.data.id);
+%}
+
+### 4. 选择有库存的上架商品
+GET {{baseUrl}}/api/products?pageNum=1&pageSize=100
+
+> {%
+    client.test("存在上架商品", function () {
+        client.assert(response.body.data.list.length > 0);
+    });
+    client.global.set("refundProductId", response.body.data.list[0].id);
+%}
+
+### 5. 选择有库存的 SKU
+GET {{baseUrl}}/api/products/{{refundProductId}}
+
+> {%
+    const sku = response.body.data.skus.find(item => item.availableStock >= 1);
+    client.test("存在可退款流程使用的SKU", function () {
+        client.assert(sku != null);
+    });
+    client.global.set("refundSkuId", sku.id);
+%}
+
+### 6. 加入购物车（审核通过流程）
+POST {{baseUrl}}/api/members/me/cart
+Authorization: Bearer {{refundMemberToken}}
+Content-Type: application/json
+
+{
+  "skuId": {{refundSkuId}},
+  "quantity": 1
+}
+
+### 7. 创建待支付订单
+POST {{baseUrl}}/api/members/me/orders
+Authorization: Bearer {{refundMemberToken}}
+Content-Type: application/json
+
+{
+  "addressId": {{refundAddressId}},
+  "note": "退款审核通过流程"
+}
+
+> {%
+    client.test("退款订单创建成功", function () {
+        client.assert(response.body.data.status === 0);
+    });
+    client.global.set("approveOrderId", response.body.data.orderId);
+    client.global.set("approveOrderSn", response.body.data.orderSn);
+%}
+
+### 8. 模拟支付
+PATCH {{baseUrl}}/api/members/me/orders/{{approveOrderId}}/pay
+Authorization: Bearer {{refundMemberToken}}
+
+> {%
+    client.test("退款订单支付成功", function () {
+        client.assert(response.body.data.status === 1);
+    });
+%}
+
+### 9. 记录支付后的可售库存
+GET {{baseUrl}}/api/products/{{refundProductId}}
+
+> {%
+    const skuId = String(client.global.get("refundSkuId"));
+    const sku = response.body.data.skus.find(item => String(item.id) === skuId);
+    client.global.set("stockAfterRefundPayment", sku.availableStock);
+%}
+
+### 10. 会员申请退款
+POST {{baseUrl}}/api/members/me/orders/{{approveOrderId}}/refunds
+Authorization: Bearer {{refundMemberToken}}
+Content-Type: application/json
+
+{
+  "reason": "商品暂时不需要了"
+}
+
+> {%
+    client.test("退款申请成功", function () {
+        client.assert(response.status === 200);
+        client.assert(response.body.data.status === 0);
+    });
+    client.global.set("approveRefundId", response.body.data.refundId);
+    client.global.set("approveRefundSn", response.body.data.refundSn);
+%}
+
+### 11. 退款申请后订单进入退款处理中
+GET {{baseUrl}}/api/members/me/orders/{{approveOrderId}}
+Authorization: Bearer {{refundMemberToken}}
+
+> {%
+    client.test("订单进入退款处理中", function () {
+        client.assert(response.body.data.status === 5);
+    });
+%}
+
+### 12. 后台按退款单号查询
+GET {{baseUrl}}/api/admin/refunds?refundSn={{approveRefundSn}}&orderSn={{approveOrderSn}}&status=0&pageNum=1&pageSize=10
+Authorization: Bearer {{refundAdminToken}}
+
+> {%
+    client.test("后台查询到退款", function () {
+        client.assert(response.status === 200);
+        client.assert(response.body.data.list.length === 1);
+    });
+%}
+
+### 13. 后台审核通过
+PATCH {{baseUrl}}/api/admin/refunds/{{approveRefundId}}/approve
+Authorization: Bearer {{refundAdminToken}}
+Content-Type: application/json
+
+{
+  "adminNote": "HTTP 流程审核通过"
+}
+
+> {%
+    client.test("退款审核通过", function () {
+        client.assert(response.status === 200);
+        client.assert(response.body.data.status === 1);
+        client.assert(response.body.data.handleTime != null);
+    });
+%}
+
+### 14. 检查订单已退款
+GET {{baseUrl}}/api/members/me/orders/{{approveOrderId}}
+Authorization: Bearer {{refundMemberToken}}
+
+> {%
+    client.test("订单进入已退款", function () {
+        client.assert(response.body.data.status === 6);
+    });
+%}
+
+### 15. 检查 SKU 实际库存已恢复
+GET {{baseUrl}}/api/products/{{refundProductId}}
+
+> {%
+    const skuId = String(client.global.get("refundSkuId"));
+    const sku = response.body.data.skus.find(item => String(item.id) === skuId);
+    const expected = Number(client.global.get("stockAfterRefundPayment")) + 1;
+    client.test("退款后SKU库存恢复", function () {
+        client.assert(sku.availableStock === expected,
+            "预期库存 " + expected + "，实际 " + sku.availableStock);
+    });
+%}
+
+### 16. 重复审核返回冲突且不会再次恢复库存
+PATCH {{baseUrl}}/api/admin/refunds/{{approveRefundId}}/approve
+Authorization: Bearer {{refundAdminToken}}
+Content-Type: application/json
+
+{
+  "adminNote": "重复审核"
+}
+
+> {%
+    client.test("重复审核被拒绝", function () {
+        client.assert(response.status === 409);
+        client.assert(response.body.code === 40935);
+    });
+%}
+
+### 17. 加入购物车（审核拒绝流程）
+POST {{baseUrl}}/api/members/me/cart
+Authorization: Bearer {{refundMemberToken}}
+Content-Type: application/json
+
+{
+  "skuId": {{refundSkuId}},
+  "quantity": 1
+}
+
+### 18. 创建并记录第二个订单
+POST {{baseUrl}}/api/members/me/orders
+Authorization: Bearer {{refundMemberToken}}
+Content-Type: application/json
+
+{
+  "addressId": {{refundAddressId}},
+  "note": "退款审核拒绝流程"
+}
+
+> {%
+    client.global.set("rejectOrderId", response.body.data.orderId);
+%}
+
+### 19. 支付第二个订单
+PATCH {{baseUrl}}/api/members/me/orders/{{rejectOrderId}}/pay
+Authorization: Bearer {{refundMemberToken}}
+
+### 20. 申请第二笔退款
+POST {{baseUrl}}/api/members/me/orders/{{rejectOrderId}}/refunds
+Authorization: Bearer {{refundMemberToken}}
+Content-Type: application/json
+
+{
+  "reason": "用于验证审核拒绝"
+}
+
+> {%
+    client.global.set("rejectRefundId", response.body.data.refundId);
+%}
+
+### 21. 后台拒绝退款
+PATCH {{baseUrl}}/api/admin/refunds/{{rejectRefundId}}/reject
+Authorization: Bearer {{refundAdminToken}}
+Content-Type: application/json
+
+{
+  "adminNote": "订单不符合退款条件"
+}
+
+> {%
+    client.test("退款审核拒绝", function () {
+        client.assert(response.status === 200);
+        client.assert(response.body.data.status === 2);
+    });
+%}
+
+### 22. 审核拒绝后订单恢复待发货
+GET {{baseUrl}}/api/members/me/orders/{{rejectOrderId}}
+Authorization: Bearer {{refundMemberToken}}
+
+> {%
+    client.test("拒绝后订单恢复待发货", function () {
+        client.assert(response.body.data.status === 1);
+    });
+%}

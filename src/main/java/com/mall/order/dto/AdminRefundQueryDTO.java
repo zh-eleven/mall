@@ -4,12 +4,13 @@ import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
-import lombok.Getter;
-import lombok.Setter;
+import lombok.Data;
 
-@Getter
-@Setter
-public class AdminOrderQueryDTO {
+@Data
+public class AdminRefundQueryDTO {
+
+    @Size(max = 64, message = "退款单号长度不能超过64个字符")
+    private String refundSn;
 
     @Size(max = 64, message = "订单号长度不能超过64个字符")
     private String orderSn;
@@ -17,8 +18,8 @@ public class AdminOrderQueryDTO {
     @Positive(message = "会员ID必须大于0")
     private Long memberId;
 
-    @Min(value = 0, message = "订单状态不能小于0")
-    @Max(value = 6, message = "订单状态不能大于6")
+    @Min(value = 0, message = "退款状态不能小于0")
+    @Max(value = 2, message = "退款状态不能大于2")
     private Integer status;
 
     @Min(value = 1, message = "页码不能小于1")
