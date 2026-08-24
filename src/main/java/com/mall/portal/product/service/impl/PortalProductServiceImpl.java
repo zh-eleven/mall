@@ -4,14 +4,11 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.mall.common.api.ErrorCode;
 import com.mall.common.api.PageResult;
+import com.mall.common.cache.CacheNames;
 import com.mall.common.exception.BusinessException;
-import com.mall.order.entity.OmsOrder;
 import com.mall.order.mapper.OmsOrderItemMapper;
 import com.mall.order.mapper.OmsOrderMapper;
-import com.mall.portal.order.dto.OrderPreviewDTO;
-import com.mall.portal.order.dto.OrderSubmitDTO;
-import com.mall.portal.order.vo.OrderPreviewVO;
-import com.mall.portal.order.vo.OrderSubmitVO;
+import org.springframework.cache.annotation.Cacheable;
 import com.mall.portal.product.service.PortalProductService;
 import com.mall.portal.product.vo.*;
 import com.mall.product.entity.*;
@@ -194,6 +191,11 @@ public class PortalProductServiceImpl
     }
 
     @Override
+    @Cacheable(
+            cacheNames = CacheNames.PORTAL_CATEGORY_TREE,
+            key = "'all'",
+            sync = true
+    )
     public List<PortalProductCategoryVO> getCategoryTree() {
 
         List<PmsProductCategory> categories =

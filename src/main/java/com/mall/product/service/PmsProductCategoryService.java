@@ -6,7 +6,7 @@ import com.mall.product.vo.ProductCategoryTreeVO;
 
 import java.util.List;
 
-public interface PmsProductCategoryService {
+public interface  PmsProductCategoryService {
 
     List<ProductCategoryTreeVO> tree();
     ProductCategoryTreeVO create(ProductCategoryCreateDTO dto);

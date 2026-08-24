@@ -19,6 +19,9 @@ import org.springframework.util.StringUtils;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+import com.mall.common.cache.CacheNames;
+import org.springframework.cache.annotation.CacheEvict;
+
 
 @Service
 @RequiredArgsConstructor
@@ -60,7 +63,12 @@ public class PmsProductCategoryServiceImpl
                 ))
                 .toList();
     }
+
     @Override
+    @CacheEvict(
+            cacheNames = CacheNames.PORTAL_CATEGORY_TREE,
+            allEntries = true
+    )
     public ProductCategoryTreeVO create(
             ProductCategoryCreateDTO dto) {
 
@@ -139,6 +147,10 @@ public class PmsProductCategoryServiceImpl
     }
 
     @Override
+    @CacheEvict(
+            cacheNames = CacheNames.PORTAL_CATEGORY_TREE,
+            allEntries = true
+    )
     public ProductCategoryTreeVO update(
             Long categoryId,
             ProductCategoryUpdateDTO dto) {
@@ -274,8 +286,13 @@ public class PmsProductCategoryServiceImpl
                 List.of()
         );
     }
+
     @Override
     @Transactional
+    @CacheEvict(
+            cacheNames = CacheNames.PORTAL_CATEGORY_TREE,
+            allEntries = true
+    )
     public void delete(Long categoryId) {
         Long childCount = categoryMapper.selectCount(
                 new LambdaQueryWrapper<PmsProductCategory>()

@@ -11,6 +11,18 @@ spring:
     username: ${DB_USERNAME:root}
     password:  ${DB_PASSWORD}
 
+  data:
+    redis:
+      host: ${REDIS_HOST:127.0.0.1}
+      port: ${REDIS_PORT:6379}
+      database: ${REDIS_DATABASE:0}
+      connect-timeout: 2s
+      timeout: 2s
+
+  cache:
+    type: redis
+    cache-names:
+      - portalCategoryTree
 
 mybatis-plus:
   configuration:
