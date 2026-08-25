@@ -214,4 +214,3 @@ GET {{baseUrl}}/api/products/{{submitProductId}}
         }
     });
 %}
-

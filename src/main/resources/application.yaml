@@ -19,6 +19,26 @@ spring:
       connect-timeout: 2s
       timeout: 2s
 
+  rabbitmq:
+    host: ${RABBITMQ_HOST:127.0.0.1}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USERNAME:mall}
+    password: ${RABBITMQ_PASSWORD:mall}
+    virtual-host: /
+    publisher-confirm-type: correlated
+    publisher-returns: true
+
+    listener:
+      simple:
+        acknowledge-mode: auto
+        default-requeue-rejected: false
+        retry:
+          enabled: true
+          max-attempts: 3
+          initial-interval: 1s
+          multiplier: 2
+          max-interval: 5s
+
   cache:
     type: redis
     cache-names:

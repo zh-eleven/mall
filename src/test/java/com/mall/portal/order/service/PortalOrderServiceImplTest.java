@@ -4,7 +4,9 @@ import com.mall.common.api.ErrorCode;
 import com.mall.common.exception.BusinessException;
 import com.mall.member.entity.UmsMemberReceiveAddress;
 import com.mall.member.mapper.UmsMemberReceiveAddressMapper;
+import com.mall.order.config.OrderProperties;
 import com.mall.order.entity.OmsCartItem;
+import com.mall.order.event.OrderCreatedEvent;
 import com.mall.order.mapper.OmsCartItemMapper;
 import com.mall.order.mapper.OmsOrderItemMapper;
 import com.mall.order.mapper.OmsOrderMapper;
@@ -27,6 +29,7 @@ import com.mall.order.entity.OmsOrderItem;
 import com.mall.order.enums.OrderStatus;
 import com.mall.portal.order.dto.OrderSubmitDTO;
 import org.mockito.ArgumentCaptor;
+import org.springframework.context.ApplicationEventPublisher;
 
 import java.time.LocalDateTime;
 import java.math.BigDecimal;
@@ -69,6 +72,12 @@ class PortalOrderServiceImplTest {
 
     @Mock
     private PmsSkuStockMapper skuStockMapper;
+
+    @Mock
+    private ApplicationEventPublisher applicationEventPublisher;
+
+    @Mock
+    private OrderProperties orderProperties;
 
     @Mock
     private OrderCancellationService
@@ -372,6 +381,12 @@ class PortalOrderServiceImplTest {
         when(cartItemMapper.delete(any()))
                 .thenReturn(1);
 
+        when(orderProperties.getTimeoutMinutes())
+                .thenReturn(30L);
+
+        LocalDateTime beforeExpireTime =
+                LocalDateTime.now().plusMinutes(30);
+
         var result = orderService.submit(
                 4L,
                 submitDTO()
@@ -445,6 +460,29 @@ class PortalOrderServiceImplTest {
         );
 
         verify(cartItemMapper).delete(any());
+
+        ArgumentCaptor<OrderCreatedEvent> eventCaptor =
+                ArgumentCaptor.forClass(
+                        OrderCreatedEvent.class
+                );
+
+        verify(applicationEventPublisher).publishEvent(
+                eventCaptor.capture()
+        );
+
+        OrderCreatedEvent event = eventCaptor.getValue();
+        assertEquals(500L, event.orderId());
+        assertFalse(
+                event.expireTime().isBefore(
+                        beforeExpireTime
+                )
+        );
+        assertFalse(
+                event.expireTime().isAfter(
+                        LocalDateTime.now()
+                                .plusMinutes(30)
+                )
+        );
     }
 
     @Test

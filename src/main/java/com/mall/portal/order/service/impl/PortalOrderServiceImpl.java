@@ -7,7 +7,9 @@ import com.mall.common.api.PageResult;
 import com.mall.common.exception.BusinessException;
 import com.mall.member.entity.UmsMemberReceiveAddress;
 import com.mall.member.mapper.UmsMemberReceiveAddressMapper;
+import com.mall.order.config.OrderProperties;
 import com.mall.order.entity.OmsCartItem;
+import com.mall.order.event.OrderCreatedEvent;
 import com.mall.order.mapper.OmsCartItemMapper;
 import com.mall.portal.order.dto.OrderPreviewDTO;
 import com.mall.portal.order.service.PortalOrderService;
@@ -17,6 +19,7 @@ import com.mall.product.entity.PmsSkuStock;
 import com.mall.product.mapper.PmsProductMapper;
 import com.mall.product.mapper.PmsSkuStockMapper;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import com.mall.order.entity.OmsOrder;
@@ -29,6 +32,7 @@ import com.mall.portal.order.dto.OrderSubmitDTO;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.util.StringUtils;
 
+import java.time.LocalDateTime;
 import java.util.UUID;
 import java.util.List;
 import java.util.Map;
@@ -47,7 +51,9 @@ public class PortalOrderServiceImpl
     private final PmsSkuStockMapper skuStockMapper;
     private final OmsOrderMapper orderMapper;
     private final OmsOrderItemMapper orderItemMapper;
+    private final ApplicationEventPublisher applicationEventPublisher;
 
+    private final OrderProperties orderProperties;
     private final OrderCancellationService
             orderCancellationService;
 
@@ -281,6 +287,19 @@ public class PortalOrderServiceImpl
         deleteSubmittedCartItems(
                 memberId,
                 preview.items()
+        );
+
+        LocalDateTime expireTime =
+                LocalDateTime.now()
+                        .plusMinutes(
+                                orderProperties.getTimeoutMinutes()
+                        );
+
+        applicationEventPublisher.publishEvent(
+                new OrderCreatedEvent(
+                        order.getId(),
+                        expireTime
+                )
         );
 
         return OrderSubmitVO.from(order);

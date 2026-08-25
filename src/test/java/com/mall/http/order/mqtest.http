@@ -1,0 +1,52 @@
+
+@baseUrl = http://localhost:8080
+@memberUsername = test003
+@memberPassword = 123456
+
+### 1. 会员登录
+POST {{baseUrl}}/api/members/login
+Content-Type: application/json
+
+{
+  "username": "{{memberUsername}}",
+  "password": "{{memberPassword}}"
+}
+
+> {%
+    client.test("会员登录成功", function () {
+        client.assert(response.status === 200);
+        client.assert(response.body.code === 200);
+    });
+
+    client.global.set(
+        "memberToken",
+        response.body.data.token
+    );
+%}
+### 5. 延迟消息到达后，已支付订单不能被取消
+GET {{baseUrl}}/api/members/me/orders/{{pendingOrderId}}
+Authorization: Bearer {{memberToken}}
+
+> {%
+    const order = response.body.data;
+
+    client.test("已支付订单没有被超时消息取消", function () {
+        client.assert(response.status === 200);
+        client.assert(response.body.code === 200);
+
+        client.assert(
+            order.status === 1,
+            "订单应保持待发货状态，实际为：" + order.status
+        );
+
+        client.assert(
+            order.paymentTime != null,
+            "支付时间不能为空"
+        );
+
+        client.assert(
+            order.cancelTime == null,
+            "已支付订单不应存在取消时间"
+        );
+    });
+%}
