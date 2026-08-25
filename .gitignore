@@ -47,3 +47,8 @@ Desktop.ini
 *.swp
 *.swo
 *~
+
+# Frontend
+mall-admin-web/node_modules/
+mall-admin-web/dist/
+mall-admin-web/.vite/
