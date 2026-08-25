@@ -63,6 +63,7 @@ GET {{baseUrl}}/api/products?pageNum=1&pageSize=100
     const products = response.body.data.list;
 
     client.test("存在已上架商品", function () {
+        client.assert(Array.isArray(products));
         client.assert(products.length > 0);
     });
 
@@ -99,7 +100,7 @@ GET {{baseUrl}}/api/products/{{submitProductId}}
     }
 %}
 
-### 5. 加入购物车
+### 5. 加入购物车并生成下单令牌
 POST {{baseUrl}}/api/members/me/cart
 Authorization: Bearer {{memberToken}}
 Content-Type: application/json
@@ -129,22 +130,34 @@ Content-Type: application/json
             String(item.quantity)
         );
     }
+
+    const submitToken =
+        "order-"
+        + Date.now()
+        + "-"
+        + Math.random().toString(16).slice(2);
+
+    client.global.set(
+        "submitToken",
+        submitToken
+    );
 %}
 
-### 6. 提交订单
+### 6. 第一次提交订单
 POST {{baseUrl}}/api/members/me/orders
 Authorization: Bearer {{memberToken}}
 Content-Type: application/json
 
 {
+  "submitToken": "{{submitToken}}",
   "addressId": {{submitAddressId}},
-  "note": "HTTP测试订单"
+  "note": "HTTP幂等测试订单"
 }
 
 > {%
     const order = response.body.data;
 
-    client.test("订单提交成功", function () {
+    client.test("第一次订单提交成功", function () {
         client.assert(response.status === 200);
         client.assert(response.body.code === 200);
         client.assert(order != null);
@@ -153,7 +166,9 @@ Content-Type: application/json
             client.assert(order.orderId != null);
             client.assert(order.orderSn != null);
             client.assert(order.status === 0);
-            client.assert(order.statusDescription === "待支付");
+            client.assert(
+                order.statusDescription === "待支付"
+            );
             client.assert(Number(order.payAmount) > 0);
         }
     });
@@ -171,7 +186,48 @@ Content-Type: application/json
     }
 %}
 
-### 7. 已提交购物车项应被删除
+### 7. 使用相同令牌重复提交
+POST {{baseUrl}}/api/members/me/orders
+Authorization: Bearer {{memberToken}}
+Content-Type: application/json
+
+{
+  "submitToken": "{{submitToken}}",
+  "addressId": {{submitAddressId}},
+  "note": "HTTP幂等测试订单"
+}
+
+> {%
+    const order = response.body.data;
+
+    const firstOrderId =
+        client.global.get("submittedOrderId");
+
+    const firstOrderSn =
+        client.global.get("submittedOrderSn");
+
+    client.test("重复提交请求成功", function () {
+        client.assert(response.status === 200);
+        client.assert(response.body.code === 200);
+        client.assert(order != null);
+    });
+
+    client.test("重复提交返回同一个订单", function () {
+        client.assert(
+            String(order.orderId) === firstOrderId,
+            "第一次订单ID：" + firstOrderId
+            + "，重复提交订单ID：" + order.orderId
+        );
+
+        client.assert(
+            String(order.orderSn) === firstOrderSn,
+            "第一次订单号：" + firstOrderSn
+            + "，重复提交订单号：" + order.orderSn
+        );
+    });
+%}
+
+### 8. 已提交购物车项应被删除
 GET {{baseUrl}}/api/members/me/cart
 Authorization: Bearer {{memberToken}}
 
@@ -188,28 +244,34 @@ Authorization: Bearer {{memberToken}}
     });
 %}
 
-### 8. 可用库存应减少
+### 9. 可用库存只减少一次
 GET {{baseUrl}}/api/products/{{submitProductId}}
 
 > {%
-    const skuId = client.global.get("submitSkuId");
+    const skuId =
+        client.global.get("submitSkuId");
 
     const sku = response.body.data.skus.find(
         item => String(item.id) === skuId
     );
 
     const expected =
-        Number(client.global.get("stockBeforeSubmit"))
-        - Number(client.global.get("submitQuantity"));
+        Number(
+            client.global.get("stockBeforeSubmit")
+        )
+        - Number(
+            client.global.get("submitQuantity")
+        );
 
-    client.test("下单后库存被锁定", function () {
+    client.test("重复提交没有重复锁定库存", function () {
         client.assert(sku != null);
 
         if (sku != null) {
             client.assert(
                 sku.availableStock === expected,
                 "预期可用库存：" + expected
-                + "，实际：" + sku.availableStock
+                + "，实际可用库存："
+                + sku.availableStock
             );
         }
     });

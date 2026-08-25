@@ -96,6 +96,7 @@ Authorization: Bearer {{refundMemberToken}}
 Content-Type: application/json
 
 {
+"submitToken": "{{$uuid}}",
   "addressId": {{refundAddressId}},
   "note": "退款审核通过流程"
 }
@@ -238,6 +239,7 @@ Authorization: Bearer {{refundMemberToken}}
 Content-Type: application/json
 
 {
+"submitToken": "{{$uuid}}",
   "addressId": {{refundAddressId}},
   "note": "退款审核拒绝流程"
 }

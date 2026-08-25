@@ -29,7 +29,9 @@ import com.mall.order.entity.OmsOrderItem;
 import com.mall.order.enums.OrderStatus;
 import com.mall.portal.order.dto.OrderSubmitDTO;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.dao.DuplicateKeyException;
 
 import java.time.LocalDateTime;
 import java.math.BigDecimal;
@@ -417,6 +419,10 @@ class PortalOrderServiceImplTest {
                 orderCaptor.getValue();
 
         assertEquals(4L, insertedOrder.getMemberId());
+        assertEquals(
+                "1234567890abcdef-submit",
+                insertedOrder.getSubmitToken()
+        );
 
         assertSame(
                 OrderStatus.PENDING_PAYMENT,
@@ -470,6 +476,16 @@ class PortalOrderServiceImplTest {
                 eventCaptor.capture()
         );
 
+        InOrder writeOrder = inOrder(
+                orderMapper,
+                skuStockMapper
+        );
+
+        writeOrder.verify(orderMapper)
+                .insert(any(OmsOrder.class));
+        writeOrder.verify(skuStockMapper)
+                .lockStock(10L, 2);
+
         OrderCreatedEvent event = eventCaptor.getValue();
         assertEquals(500L, event.orderId());
         assertFalse(
@@ -495,6 +511,9 @@ class PortalOrderServiceImplTest {
                 sku()
         );
 
+        when(orderMapper.insert(any(OmsOrder.class)))
+                .thenReturn(1);
+
         when(skuStockMapper.lockStock(10L, 2))
                 .thenReturn(0);
 
@@ -511,14 +530,85 @@ class PortalOrderServiceImplTest {
                 exception.getErrorCode()
         );
 
-        verify(orderMapper, never())
-                .insert(any(OmsOrder.class));
-
-        verify(orderMapper, never())
+        verify(orderMapper)
                 .insert(any(OmsOrder.class));
 
         verify(cartItemMapper, never())
                 .delete(any());
+    }
+
+    @Test
+    void submitShouldReturnExistingOrderForRepeatedToken() {
+
+        OmsOrder existingOrder = pendingOrder();
+        existingOrder.setSubmitToken(
+                "1234567890abcdef-submit"
+        );
+
+        when(orderMapper.selectOne(any()))
+                .thenReturn(existingOrder);
+
+        var result = orderService.submit(
+                4L,
+                submitDTO()
+        );
+
+        assertEquals(500L, result.orderId());
+        assertEquals("TEST-ORDER", result.orderSn());
+
+        verify(orderMapper, never())
+                .insert(any(OmsOrder.class));
+        verifyNoInteractions(
+                addressMapper,
+                cartItemMapper,
+                productMapper,
+                skuStockMapper,
+                orderItemMapper,
+                applicationEventPublisher
+        );
+    }
+
+    @Test
+    void submitShouldReturnConcurrentOrderAfterUniqueKeyConflict() {
+
+        stubPreviewData(
+                address(),
+                cartItem(),
+                product(),
+                sku()
+        );
+
+        OmsOrder concurrentOrder = pendingOrder();
+        concurrentOrder.setSubmitToken(
+                "1234567890abcdef-submit"
+        );
+
+        when(orderMapper.insert(any(OmsOrder.class)))
+                .thenThrow(new DuplicateKeyException(
+                        "duplicate submit token"
+                ));
+
+        when(orderMapper
+                .selectByMemberIdAndSubmitTokenForUpdate(
+                        4L,
+                        "1234567890abcdef-submit"
+                ))
+                .thenReturn(concurrentOrder);
+
+        var result = orderService.submit(
+                4L,
+                submitDTO()
+        );
+
+        assertEquals(500L, result.orderId());
+        assertEquals("TEST-ORDER", result.orderSn());
+
+        verify(skuStockMapper, never())
+                .lockStock(anyLong(), anyInt());
+        verify(orderItemMapper, never())
+                .insert(any(OmsOrderItem.class));
+        verify(cartItemMapper, never()).delete(any());
+        verifyNoInteractions(applicationEventPublisher);
     }
 
     @Test
@@ -932,6 +1022,9 @@ class PortalOrderServiceImplTest {
     private OrderSubmitDTO submitDTO() {
         OrderSubmitDTO dto = new OrderSubmitDTO();
 
+        dto.setSubmitToken(
+                "1234567890abcdef-submit"
+        );
         dto.setAddressId(30L);
         dto.setNote("  测试备注  ");
 

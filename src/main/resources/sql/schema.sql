@@ -291,6 +291,7 @@ CREATE TABLE IF NOT EXISTS oms_order (
     id BIGINT NOT NULL AUTO_INCREMENT,
     order_sn VARCHAR(64) NOT NULL,
     member_id BIGINT NOT NULL,
+    submit_token VARCHAR(64) NULL COMMENT '下单幂等令牌，历史订单允许为空',
     status TINYINT NOT NULL DEFAULT 0
         COMMENT '0待支付 1待发货 2已发货 3已完成 4已取消 5退款处理中 6已退款',
     total_amount DECIMAL(12,2) NOT NULL,
@@ -314,6 +315,7 @@ CREATE TABLE IF NOT EXISTS oms_order (
     PRIMARY KEY (id),
     UNIQUE KEY uk_order_sn (order_sn),
     KEY idx_order_member_status_time (member_id, status, create_time, id),
+    UNIQUE KEY uk_order_member_submit_token (member_id, submit_token),
     KEY idx_order_timeout_scan (status, create_time, id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 

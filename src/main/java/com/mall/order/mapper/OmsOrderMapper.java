@@ -15,6 +15,23 @@ public interface OmsOrderMapper
         extends BaseMapper<OmsOrder> {
 
     /**
+     * 并发重复提交触发唯一键冲突后，
+     * 查询并锁定第一次创建的订单。
+     */
+    @Select("""
+        SELECT *
+        FROM oms_order
+        WHERE member_id = #{memberId}
+          AND submit_token = #{submitToken}
+        LIMIT 1
+        FOR UPDATE
+        """)
+    OmsOrder selectByMemberIdAndSubmitTokenForUpdate(
+            @Param("memberId") Long memberId,
+            @Param("submitToken") String submitToken
+    );
+
+    /**
      * 仅允许会员取消自己的待支付订单。
      */
     @Update("""

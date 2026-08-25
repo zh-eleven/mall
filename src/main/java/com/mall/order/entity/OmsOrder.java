@@ -23,6 +23,11 @@ public class OmsOrder {
 
     private Long memberId;
 
+    /**
+     * 同一次下单请求的幂等令牌。
+     */
+    private String submitToken;
+
     private OrderStatus status;
 
     /**

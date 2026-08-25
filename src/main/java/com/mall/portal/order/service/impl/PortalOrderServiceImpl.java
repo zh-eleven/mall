@@ -257,9 +257,23 @@ public class PortalOrderServiceImpl
             Long memberId,
             OrderSubmitDTO dto) {
 
+        String submitToken =
+                dto.getSubmitToken().trim();
+
+        // 普通重试：订单已经创建，直接返回原订单
+        OmsOrder existingOrder =
+                findOrderBySubmitToken(
+                        memberId,
+                        submitToken
+                );
+
+        if (existingOrder != null) {
+            return OrderSubmitVO.from(existingOrder);
+        }
+
         /*
-         * 提交时重新生成预览，不能相信前端之前
-         * 获取的价格、库存和地址信息。
+         * 重新计算价格、库存和地址，
+         * 不信任前端提交的数据。
          */
         OrderPreviewDTO previewDTO =
                 new OrderPreviewDTO();
@@ -269,15 +283,42 @@ public class PortalOrderServiceImpl
         OrderPreviewVO preview =
                 preview(memberId, previewDTO);
 
-        lockStocks(preview.items());
-
         OmsOrder order = buildOrder(
                 memberId,
                 dto,
-                preview
+                preview,
+                submitToken
         );
 
-        saveOrder(order);
+        /*
+         * 先写入带唯一令牌的订单，再锁库存。
+         * 库存锁定失败时，事务会回滚订单记录。
+         */
+        try {
+            saveOrder(order);
+        } catch (DuplicateKeyException exception) {
+
+            // 并发重复提交：查询另一个请求创建的订单
+            OmsOrder concurrentOrder =
+                    orderMapper
+                            .selectByMemberIdAndSubmitTokenForUpdate(
+                                    memberId,
+                                    submitToken
+                            );
+
+            if (concurrentOrder != null) {
+                return OrderSubmitVO.from(
+                        concurrentOrder
+                );
+            }
+
+            throw new BusinessException(
+                    ErrorCode.DATA_CONFLICT,
+                    exception
+            );
+        }
+
+        lockStocks(preview.items());
 
         saveOrderItems(
                 order,
@@ -292,7 +333,8 @@ public class PortalOrderServiceImpl
         LocalDateTime expireTime =
                 LocalDateTime.now()
                         .plusMinutes(
-                                orderProperties.getTimeoutMinutes()
+                                orderProperties
+                                        .getTimeoutMinutes()
                         );
 
         applicationEventPublisher.publishEvent(
@@ -304,7 +346,6 @@ public class PortalOrderServiceImpl
 
         return OrderSubmitVO.from(order);
     }
-
     private void lockStocks(
             List<OrderPreviewItemVO> items) {
 
@@ -326,7 +367,8 @@ public class PortalOrderServiceImpl
     private OmsOrder buildOrder(
             Long memberId,
             OrderSubmitDTO dto,
-            OrderPreviewVO preview) {
+            OrderPreviewVO preview,
+            String submitToken) {
 
         OrderReceiverVO receiver =
                 preview.receiver();
@@ -335,6 +377,7 @@ public class PortalOrderServiceImpl
 
         order.setOrderSn(generateOrderSn());
         order.setMemberId(memberId);
+        order.setSubmitToken(submitToken);
         order.setStatus(
                 OrderStatus.PENDING_PAYMENT
         );
@@ -386,18 +429,29 @@ public class PortalOrderServiceImpl
 
     private void saveOrder(OmsOrder order) {
 
-        try {
-            if (orderMapper.insert(order) != 1) {
-                throw new BusinessException(
-                        ErrorCode.DATA_CONFLICT
-                );
-            }
-        } catch (DuplicateKeyException exception) {
+        if (orderMapper.insert(order) != 1) {
             throw new BusinessException(
-                    ErrorCode.DATA_CONFLICT,
-                    exception
+                    ErrorCode.DATA_CONFLICT
             );
         }
+    }
+
+    private OmsOrder findOrderBySubmitToken(
+            Long memberId,
+            String submitToken) {
+
+        return orderMapper.selectOne(
+                new LambdaQueryWrapper<OmsOrder>()
+                        .eq(
+                                OmsOrder::getMemberId,
+                                memberId
+                        )
+                        .eq(
+                                OmsOrder::getSubmitToken,
+                                submitToken
+                        )
+                        .last("LIMIT 1")
+        );
     }
 
     private void saveOrderItems(
