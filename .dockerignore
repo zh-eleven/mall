@@ -1,0 +1,9 @@
+.git
+.idea
+.vscode
+target
+mall-admin-web
+mall-portal-web
+**/node_modules
+**/dist
+*.iml

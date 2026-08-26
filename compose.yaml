@@ -1,0 +1,93 @@
+services:
+  redis:
+    image: redis:8.4-alpine
+    container_name: mall-redis
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks:
+      - mall-network
+
+  rabbitmq:
+    image: rabbitmq:4-management
+    container_name: mall-rabbitmq
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: mall
+      RABBITMQ_DEFAULT_PASS: mall
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - mall-network
+
+  backend:
+    image: mall-backend:local
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: mall-backend
+    restart: unless-stopped
+    env_file:
+      - .env.docker.local
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "8080:8080"
+    depends_on:
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - mall-network
+
+  admin-web:
+    image: mall-admin-web:local
+    build:
+      context: ./mall-admin-web
+      dockerfile: Dockerfile
+    container_name: mall-admin-web
+    restart: unless-stopped
+    ports:
+      - "8081:80"
+    depends_on:
+      - backend
+    networks:
+      - mall-network
+
+  portal-web:
+    image: mall-portal-web:local
+    build:
+      context: ./mall-portal-web
+      dockerfile: Dockerfile
+    container_name: mall-portal-web
+    restart: unless-stopped
+    ports:
+      - "8082:80"
+    depends_on:
+      - backend
+    networks:
+      - mall-network
+
+volumes:
+  redis-data:
+  rabbitmq-data:
+
+networks:
+  mall-network:
+    driver: bridge

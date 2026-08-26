@@ -4,7 +4,10 @@ import Breadcrumb from '@/components/Breadcrumb/index.vue'
 import Hamburger from '@/components/Hamburger/index.vue'
 import { useAppStore } from '@/stores/app'
 import { useUserStore } from '@/stores/user'
-import { ArrowDown } from '@element-plus/icons-vue'
+import {
+  ArrowDown,
+  UserFilled,
+} from '@element-plus/icons-vue'
 
 // 定义组件名称
 defineOptions({
@@ -36,7 +39,15 @@ const handleLogout = async () => {
     <breadcrumb></breadcrumb>
     <el-dropdown class="avatar-container" trigger="click">
       <div class="avatar-wrapper">
-        <img class="user-avatar" :src="avatar">
+        <el-avatar
+          class="user-avatar"
+          :size="40"
+          :src="avatar || undefined"
+        >
+          <el-icon>
+            <user-filled />
+          </el-icon>
+        </el-avatar>
         <el-icon class="el-icon-caret-bottom">
           <arrow-down />
         </el-icon>

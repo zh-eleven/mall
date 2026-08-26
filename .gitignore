@@ -22,6 +22,10 @@ out/
 .env
 .env.*
 !.env.example
+!mall-admin-web/.env.development
+!mall-admin-web/.env.production
+!mall-portal-web/.env.development
+!mall-portal-web/.env.production
 application-local.yml
 application-local.yaml
 src/main/resources/application-local.yml
@@ -49,6 +53,16 @@ Desktop.ini
 *~
 
 # Frontend
-mall-admin-web/node_modules/
-mall-admin-web/dist/
-mall-admin-web/.vite/
+**/node_modules/
+**/dist/
+**/.vite/
+
+# Local AI/browser design artifacts
+mall-portal-web/.claude/
+mall-portal-web/.playwright-mcp/
+mall-portal-web/.tmp/
+mall-portal-web/.github/
+mall-portal-web/AGENTS.md
+mall-portal-web/CLAUDE.md
+mall-portal-web/gptimg/
+mall-portal-web/images/
