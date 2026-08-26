@@ -7,6 +7,7 @@ import com.mall.common.api.ErrorCode;
 import com.mall.common.api.PageResult;
 import com.mall.common.cache.CacheNames;
 import com.mall.common.exception.BusinessException;
+import com.mall.product.cache.PortalProductNotFoundCache;
 import com.mall.product.dto.ProductCreateDTO;
 import com.mall.product.dto.ProductUpdateDTO;
 import com.mall.product.entity.PmsBrand;
@@ -39,7 +40,7 @@ public class PmsProductServiceImpl implements PmsProductService {
     private final PmsProductCategoryMapper categoryMapper;
     private final PmsSkuStockMapper skuStockMapper;
     private final PmsProductAttributeValueMapper attributeValueMapper;
-
+    private final PortalProductNotFoundCache productNotFoundCache;
 
     @Override
     @Transactional
@@ -393,6 +394,10 @@ public class PmsProductServiceImpl implements PmsProductService {
             throw new BusinessException(
                     ErrorCode.DATA_CONFLICT
             );
+        }
+
+        if (Integer.valueOf(1).equals(publishStatus)) {
+            productNotFoundCache.evictAfterCommit(productId);
         }
 
         return ProductVO.from(findById(productId));

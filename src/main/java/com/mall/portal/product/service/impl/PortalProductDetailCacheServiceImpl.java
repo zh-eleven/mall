@@ -20,7 +20,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
+import com.mall.product.cache.PortalProductNotFoundCache;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
@@ -36,6 +36,7 @@ public class PortalProductDetailCacheServiceImpl
     private final PmsProductAttributeMapper attributeMapper;
     private final PmsProductAttributeValueMapper attributeValueMapper;
     private final PmsSkuStockMapper skuStockMapper;
+    private final PortalProductNotFoundCache productNotFoundCache;
 
     @Override
     @Cacheable(
@@ -44,6 +45,12 @@ public class PortalProductDetailCacheServiceImpl
             sync = true
     )
     public PortalProductDetailCacheVO getStaticDetail(Long productId) {
+
+        if (productNotFoundCache.contains(productId)) {
+            throw new BusinessException(
+                    ErrorCode.PRODUCT_NOT_FOUND
+            );
+        }
 
         PmsProduct product = productMapper.selectOne(
                 new LambdaQueryWrapper<PmsProduct>()
@@ -68,6 +75,8 @@ public class PortalProductDetailCacheServiceImpl
         );
 
         if (product == null) {
+            productNotFoundCache.put(productId);
+
             throw new BusinessException(
                     ErrorCode.PRODUCT_NOT_FOUND
             );

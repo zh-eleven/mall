@@ -8,6 +8,7 @@ import com.mall.common.api.ErrorCode;
 import com.mall.common.exception.BusinessException;
 import com.mall.product.dto.ProductCreateDTO;
 import com.mall.product.dto.ProductUpdateDTO;
+import com.mall.product.cache.PortalProductNotFoundCache;
 import com.mall.product.entity.PmsBrand;
 import com.mall.product.entity.PmsProduct;
 import com.mall.product.entity.PmsProductCategory;
@@ -66,6 +67,9 @@ class PmsProductServiceImplTest {
     @Mock
     private PmsProductAttributeValueMapper attributeValueMapper;
 
+    @Mock
+    private PortalProductNotFoundCache productNotFoundCache;
+
     @BeforeEach
     void setUp() {
         productService = new PmsProductServiceImpl(
@@ -73,7 +77,8 @@ class PmsProductServiceImplTest {
                 brandMapper,
                 categoryMapper,
                 skuStockMapper,
-                attributeValueMapper
+                attributeValueMapper,
+                productNotFoundCache
         );
     }
 
@@ -480,6 +485,7 @@ class PmsProductServiceImplTest {
         assertEquals(1, result.publishStatus());
         verify(skuStockMapper).selectCount(any());
         verify(productMapper).update(isNull(), any());
+        verify(productNotFoundCache).evictAfterCommit(10L);
     }
 
     @Test
@@ -500,6 +506,8 @@ class PmsProductServiceImplTest {
         assertEquals(0, result.publishStatus());
         verifyNoInteractions(skuStockMapper);
         verify(productMapper).update(isNull(), any());
+        verify(productNotFoundCache, never())
+                .evictAfterCommit(anyLong());
     }
     @Test
     void getDetailShouldReturnProductAttributeValuesAndSkus() {

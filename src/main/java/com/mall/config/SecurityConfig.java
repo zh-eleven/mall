@@ -59,6 +59,12 @@ public class SecurityConfig {
                         .requestMatchers("/api/members/me/**")
                         .hasRole("MEMBER")
 
+                        .requestMatchers(
+                                "/actuator/metrics",
+                                "/actuator/metrics/**"
+                        )
+                        .hasRole("ADMIN")
+
                         .anyRequest()
                         .authenticated()
                 )

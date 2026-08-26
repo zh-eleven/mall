@@ -69,3 +69,11 @@ order:
 logging:
   level:
     com.mall: debug
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include:
+          - health
+          - metrics

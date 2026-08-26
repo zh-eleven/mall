@@ -6,44 +6,48 @@ import com.mall.common.cache.CacheNames;
 import com.mall.portal.product.vo.PortalProductCategoryVO;
 import com.mall.portal.product.vo.PortalProductDetailCacheVO;
 import org.springframework.boot.autoconfigure.cache.RedisCacheManagerBuilderCustomizer;
-import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.cache.annotation.EnableCaching;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.data.redis.cache.RedisCacheConfiguration;
+import org.springframework.data.redis.cache.RedisCacheWriter;
 import org.springframework.data.redis.serializer.Jackson2JsonRedisSerializer;
 import org.springframework.data.redis.serializer.RedisSerializationContext;
-import com.mall.common.cache.LoggingCacheErrorHandler;
-import org.springframework.cache.annotation.CachingConfigurer;
-import org.springframework.cache.interceptor.CacheErrorHandler;
-import java.util.List;
 
-@EnableConfigurationProperties(CacheProperties.class)
+import java.time.Duration;
+import java.util.List;
+import java.util.concurrent.ThreadLocalRandom;
+
 @Configuration(proxyBeanMethods = false)
 @EnableCaching
-public class RedisCacheConfig  implements CachingConfigurer {
+public class RedisCacheConfig {
 
-    @Override
-    public CacheErrorHandler errorHandler() {
-        return new LoggingCacheErrorHandler();
-    }
+    private static final long PRODUCT_DETAIL_MIN_TTL_SECONDS = 8 * 60;
+    private static final long PRODUCT_DETAIL_MAX_TTL_SECONDS = 12 * 60;
+
+    //每次商品详情写入 Redis 时，随机生成一个 8～12 分钟的 TTL。
+    private static final RedisCacheWriter.TtlFunction PRODUCT_DETAIL_TTL =
+            (key, value) -> Duration.ofSeconds(
+                    ThreadLocalRandom.current().nextLong(
+                            PRODUCT_DETAIL_MIN_TTL_SECONDS,
+                            PRODUCT_DETAIL_MAX_TTL_SECONDS + 1
+                    )
+            );
 
     @Bean
-    public RedisCacheConfiguration redisCacheConfiguration(
-            CacheProperties properties) {
-
+    public RedisCacheConfiguration redisCacheConfiguration() {
+    //这里定义所有缓存的默认规则。
         return RedisCacheConfiguration.defaultCacheConfig()
-                .entryTtl(properties.getProductDetailTtl())
+                .entryTtl(Duration.ofMinutes(10))
                 .disableCachingNullValues()
-                .prefixCacheNameWith(properties.getKeyPrefix());
+                .prefixCacheNameWith("mall:");
     }
 
     @Bean
     public RedisCacheManagerBuilderCustomizer
     redisCacheManagerBuilderCustomizer(
             RedisCacheConfiguration configuration,
-            ObjectMapper objectMapper,
-            CacheProperties properties) {
+            ObjectMapper objectMapper) {
 
         JavaType categoryTreeType =
                 objectMapper.getTypeFactory()
@@ -67,22 +71,27 @@ public class RedisCacheConfig  implements CachingConfigurer {
 
         RedisCacheConfiguration categoryConfiguration =
                 configuration
-                        .entryTtl(properties.getCategoryTreeTtl())
+                        .entryTtl(Duration.ofMinutes(30))
                         .serializeValuesWith(
-                                RedisSerializationContext.SerializationPair
+                                RedisSerializationContext
+                                        .SerializationPair
                                         .fromSerializer(categorySerializer)
                         );
 
         RedisCacheConfiguration productDetailConfiguration =
                 configuration
-                        .entryTtl(properties.getProductDetailTtl())
+                        .entryTtl(PRODUCT_DETAIL_TTL)
                         .serializeValuesWith(
-                                RedisSerializationContext.SerializationPair
-                                        .fromSerializer(productDetailSerializer)
+                                RedisSerializationContext
+                                        .SerializationPair
+                                        .fromSerializer(
+                                                productDetailSerializer
+                                        )
                         );
 
         return builder -> builder
                 .transactionAware()
+                .enableStatistics()
                 .withCacheConfiguration(
                         CacheNames.PORTAL_CATEGORY_TREE,
                         categoryConfiguration
