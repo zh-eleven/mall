@@ -33,6 +33,7 @@ import org.springframework.dao.DuplicateKeyException;
 import org.springframework.util.StringUtils;
 
 import java.time.LocalDateTime;
+import java.util.TreeMap;
 import java.util.UUID;
 import java.util.List;
 import java.util.Map;
@@ -346,23 +347,37 @@ public class PortalOrderServiceImpl
 
         return OrderSubmitVO.from(order);
     }
-    private void lockStocks(
-            List<OrderPreviewItemVO> items) {
 
-        for (OrderPreviewItemVO item : items) {
+//锁库存
+private void lockStocks(
+        List<OrderPreviewItemVO> items) {
 
-            int updated = skuStockMapper.lockStock(
-                    item.skuId(),
-                    item.quantity()
+    Map<Long, Integer> quantityBySku =
+            new TreeMap<>();
+
+    for (OrderPreviewItemVO item : items) {
+        quantityBySku.merge(
+                item.skuId(),
+                item.quantity(),
+                Math::addExact
+        );
+    }
+
+    for (Map.Entry<Long, Integer> entry
+            : quantityBySku.entrySet()) {
+
+        int updated = skuStockMapper.lockStock(
+                entry.getKey(),
+                entry.getValue()
+        );
+
+        if (updated != 1) {
+            throw new BusinessException(
+                    ErrorCode.STOCK_INSUFFICIENT
             );
-
-            if (updated != 1) {
-                throw new BusinessException(
-                        ErrorCode.STOCK_INSUFFICIENT
-                );
-            }
         }
     }
+}
 
     private OmsOrder buildOrder(
             Long memberId,
@@ -765,6 +780,32 @@ public class PortalOrderServiceImpl
                             item.getSkuId(),
                             item.getQuantity()
                     );
+
+            if (updated != 1) {
+                throw new BusinessException(
+                        ErrorCode.DATA_CONFLICT
+                );
+            }
+        }
+
+        Map<Long, Integer> quantityByProduct =
+                new TreeMap<>();
+
+        for (OmsOrderItem item : items) {
+            quantityByProduct.merge(
+                    item.getProductId(),
+                    item.getQuantity(),
+                    Math::addExact
+            );
+        }
+
+        for (Map.Entry<Long, Integer> entry
+                : quantityByProduct.entrySet()) {
+
+            int updated = productMapper.decreaseStock(
+                    entry.getKey(),
+                    entry.getValue()
+            );
 
             if (updated != 1) {
                 throw new BusinessException(

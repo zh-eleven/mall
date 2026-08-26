@@ -17,6 +17,7 @@ import com.mall.order.mapper.OmsOrderMapper;
 import com.mall.order.mapper.OmsOrderRefundMapper;
 import com.mall.order.service.AdminOrderRefundService;
 import com.mall.order.vo.OrderRefundVO;
+import com.mall.product.mapper.PmsProductMapper;
 import com.mall.product.mapper.PmsSkuStockMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -24,6 +25,8 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.util.List;
+import java.util.Map;
+import java.util.TreeMap;
 
 @Service
 @RequiredArgsConstructor
@@ -38,6 +41,8 @@ public class AdminOrderRefundServiceImpl
     private final OmsOrderItemMapper orderItemMapper;
 
     private final PmsSkuStockMapper skuStockMapper;
+
+    private final PmsProductMapper productMapper;
 
     @Override
     public PageResult<OrderRefundVO> page(
@@ -119,6 +124,32 @@ public class AdminOrderRefundServiceImpl
             int stockUpdated = skuStockMapper.restoreStock(
                     item.getSkuId(),
                     item.getQuantity()
+            );
+
+            if (stockUpdated != 1) {
+                throw new BusinessException(
+                        ErrorCode.DATA_CONFLICT
+                );
+            }
+        }
+
+        Map<Long, Integer> quantityByProduct =
+                new TreeMap<>();
+
+        for (OmsOrderItem item : items) {
+            quantityByProduct.merge(
+                    item.getProductId(),
+                    item.getQuantity(),
+                    Math::addExact
+            );
+        }
+
+        for (Map.Entry<Long, Integer> entry
+                : quantityByProduct.entrySet()) {
+
+            int stockUpdated = productMapper.increaseStock(
+                    entry.getKey(),
+                    entry.getValue()
             );
 
             if (stockUpdated != 1) {
