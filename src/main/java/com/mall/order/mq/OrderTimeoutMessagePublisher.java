@@ -63,6 +63,20 @@ public class OrderTimeoutMessagePublisher {
                         return;
                     }
 
+                    var returned = correlationData.getReturned();
+
+                    if (returned != null) {
+                        log.error(
+                                "订单超时消息无法路由: orderId={}, replyCode={}, replyText={}, exchange={}, routingKey={}",
+                                orderId,
+                                returned.getReplyCode(),
+                                returned.getReplyText(),
+                                returned.getExchange(),
+                                returned.getRoutingKey()
+                        );
+                        return;
+                    }
+
                     if (confirm.isAck()) {
                         log.info(
                                 "订单超时消息发送成功: orderId={}",

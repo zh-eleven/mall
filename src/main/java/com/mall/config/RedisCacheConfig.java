@@ -6,34 +6,44 @@ import com.mall.common.cache.CacheNames;
 import com.mall.portal.product.vo.PortalProductCategoryVO;
 import com.mall.portal.product.vo.PortalProductDetailCacheVO;
 import org.springframework.boot.autoconfigure.cache.RedisCacheManagerBuilderCustomizer;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.cache.annotation.EnableCaching;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.data.redis.cache.RedisCacheConfiguration;
 import org.springframework.data.redis.serializer.Jackson2JsonRedisSerializer;
 import org.springframework.data.redis.serializer.RedisSerializationContext;
-
-import java.time.Duration;
+import com.mall.common.cache.LoggingCacheErrorHandler;
+import org.springframework.cache.annotation.CachingConfigurer;
+import org.springframework.cache.interceptor.CacheErrorHandler;
 import java.util.List;
 
+@EnableConfigurationProperties(CacheProperties.class)
 @Configuration(proxyBeanMethods = false)
 @EnableCaching
-public class RedisCacheConfig {
+public class RedisCacheConfig  implements CachingConfigurer {
+
+    @Override
+    public CacheErrorHandler errorHandler() {
+        return new LoggingCacheErrorHandler();
+    }
 
     @Bean
-    public RedisCacheConfiguration redisCacheConfiguration() {
+    public RedisCacheConfiguration redisCacheConfiguration(
+            CacheProperties properties) {
 
         return RedisCacheConfiguration.defaultCacheConfig()
-                .entryTtl(Duration.ofMinutes(10))
+                .entryTtl(properties.getProductDetailTtl())
                 .disableCachingNullValues()
-                .prefixCacheNameWith("mall:");
+                .prefixCacheNameWith(properties.getKeyPrefix());
     }
 
     @Bean
     public RedisCacheManagerBuilderCustomizer
     redisCacheManagerBuilderCustomizer(
             RedisCacheConfiguration configuration,
-            ObjectMapper objectMapper) {
+            ObjectMapper objectMapper,
+            CacheProperties properties) {
 
         JavaType categoryTreeType =
                 objectMapper.getTypeFactory()
@@ -57,22 +67,18 @@ public class RedisCacheConfig {
 
         RedisCacheConfiguration categoryConfiguration =
                 configuration
-                        .entryTtl(Duration.ofMinutes(30))
+                        .entryTtl(properties.getCategoryTreeTtl())
                         .serializeValuesWith(
-                                RedisSerializationContext
-                                        .SerializationPair
+                                RedisSerializationContext.SerializationPair
                                         .fromSerializer(categorySerializer)
                         );
 
         RedisCacheConfiguration productDetailConfiguration =
                 configuration
-                        .entryTtl(Duration.ofMinutes(10))
+                        .entryTtl(properties.getProductDetailTtl())
                         .serializeValuesWith(
-                                RedisSerializationContext
-                                        .SerializationPair
-                                        .fromSerializer(
-                                                productDetailSerializer
-                                        )
+                                RedisSerializationContext.SerializationPair
+                                        .fromSerializer(productDetailSerializer)
                         );
 
         return builder -> builder

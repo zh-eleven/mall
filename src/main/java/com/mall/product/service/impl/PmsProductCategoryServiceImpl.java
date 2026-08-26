@@ -69,6 +69,7 @@ public class PmsProductCategoryServiceImpl
             cacheNames = CacheNames.PORTAL_CATEGORY_TREE,
             allEntries = true
     )
+    @Transactional
     public ProductCategoryTreeVO create(
             ProductCategoryCreateDTO dto) {
 
@@ -151,6 +152,7 @@ public class PmsProductCategoryServiceImpl
             cacheNames = CacheNames.PORTAL_CATEGORY_TREE,
             allEntries = true
     )
+    @Transactional
     public ProductCategoryTreeVO update(
             Long categoryId,
             ProductCategoryUpdateDTO dto) {

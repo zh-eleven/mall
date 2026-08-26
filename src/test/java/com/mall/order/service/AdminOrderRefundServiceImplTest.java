@@ -38,6 +38,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import com.mall.product.mapper.PmsProductMapper;
 
 @ExtendWith(MockitoExtension.class)
 class AdminOrderRefundServiceImplTest {
@@ -61,6 +62,9 @@ class AdminOrderRefundServiceImplTest {
 
     @Mock
     private PmsSkuStockMapper skuStockMapper;
+
+    @Mock
+    private PmsProductMapper productMapper;
 
     @Test
     void approveShouldMarkOrderRefundedRestoreStockAndCompleteRefund() {
@@ -280,7 +284,8 @@ class AdminOrderRefundServiceImplTest {
                 refundMapper,
                 orderMapper,
                 orderItemMapper,
-                skuStockMapper
+                skuStockMapper,
+                productMapper
         );
     }
 

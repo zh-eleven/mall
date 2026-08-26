@@ -28,6 +28,9 @@ spring:
     publisher-confirm-type: correlated
     publisher-returns: true
 
+    template:
+      mandatory: true
+
     listener:
       simple:
         acknowledge-mode: auto
@@ -44,6 +47,10 @@ spring:
     cache-names:
       - portalCategoryTree
       - portalProductDetail
+    key-prefix:
+      mall:v1:
+        category-tree-ttl: 30m
+        product-detail-ttl: 10m
 
 mybatis-plus:
   configuration:

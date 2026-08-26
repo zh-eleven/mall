@@ -10,12 +10,20 @@ public class MybatisTestSupport {
     }
 
     public static void initializeTableInfo(Class<?>... entityTypes) {
-        MybatisConfiguration configuration = new MybatisConfiguration();
+        MybatisConfiguration configuration =
+                new MybatisConfiguration();
+
         MapperBuilderAssistant assistant =
-                new MapperBuilderAssistant(configuration, "test");
+                new MapperBuilderAssistant(
+                        configuration,
+                        "test"
+                );
 
         for (Class<?> entityType : entityTypes) {
-            TableInfoHelper.initTableInfo(assistant, entityType);
+            TableInfoHelper.initTableInfo(
+                    assistant,
+                    entityType
+            );
         }
     }
 }
