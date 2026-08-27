@@ -103,6 +103,10 @@ mysql -u root -p < src/main/resources/sql/demo-data.sql
 mysql -u root -p < src/main/resources/sql/local-dev-admin.sql
 ```
 
+已有数据库升级秒杀模块时，按顺序执行
+`seckill-migration.sql` 和 `appendseckill.sql`；全新数据库的
+`schema.sql` 与 `rbac-data.sql` 已包含秒杀表和权限数据。
+
 也可以在 MySQL Workbench 或 IDEA Database 工具中按相同顺序执行。
 `local-dev-admin.sql` 只允许用于本地开发。
 
@@ -221,12 +225,12 @@ GitHub Actions 会在 push 和 pull request 时并行执行以上检查。
 
 ## MVP 边界与下一步
 
-当前未提供真实支付、优惠券/秒杀后端、对象存储、消息通知、接口文档、端到端测试、
+当前未提供真实支付、优惠券、对象存储、消息通知、接口文档、端到端测试、
 监控告警和生产部署方案。建议下一版优先补充：
 
 1. OpenAPI 文档和 API 集成测试。
 2. 支付回调验签与订单状态机进一步加固。
-3. 优惠券、库存预占/释放和秒杀链路。
+3. 优惠券，以及秒杀链路的压测、监控和生产化演练。
 4. 文件存储、日志追踪、指标监控和生产配置分层。
 
 ## 开源来源与许可证

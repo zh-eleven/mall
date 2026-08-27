@@ -16,10 +16,15 @@ class DatabaseScriptTest {
             throws IOException {
         String sql = resource("sql/schema.sql");
 
-        assertEquals(19, occurrences(sql, "CREATE TABLE IF NOT EXISTS"));
+        assertEquals(23, occurrences(sql, "CREATE TABLE IF NOT EXISTS"));
         assertTrue(sql.contains("CREATE TABLE IF NOT EXISTS ums_member"));
         assertTrue(sql.contains("CREATE TABLE IF NOT EXISTS oms_order_refund"));
         assertTrue(sql.contains("CREATE TABLE IF NOT EXISTS pms_sku_stock"));
+        assertTrue(sql.contains("CREATE TABLE IF NOT EXISTS sms_seckill_activity"));
+        assertTrue(sql.contains("CREATE TABLE IF NOT EXISTS oms_seckill_failure"));
+        assertTrue(sql.contains(
+                "uk_seckill_request (request_id, seckill_sku_id, member_id)"
+        ));
         assertTrue(sql.contains("idx_order_timeout_scan"));
         assertTrue(sql.contains("idx_refund_member_status_time"));
         assertFalse(sql.toUpperCase().contains("DROP TABLE"));
@@ -34,10 +39,13 @@ class DatabaseScriptTest {
 
         for (String permission : new String[]{
                 "member:read", "member:write",
-                "refund:read", "refund:write"
+                "refund:read", "refund:write",
+                "seckill:read", "seckill:write"
         }) {
             assertTrue(rbac.contains(permission));
-            assertTrue(migration.contains(permission));
+            if (!permission.startsWith("seckill:")) {
+                assertTrue(migration.contains(permission));
+            }
         }
 
         assertTrue(rbac.contains("ON DUPLICATE KEY UPDATE"));

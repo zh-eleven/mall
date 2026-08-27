@@ -33,7 +33,9 @@ VALUES
     ('会员查询', 'member:read', '/api/admin/members/**', 'GET', '后台会员查询', 1),
     ('会员管理', 'member:write', '/api/admin/members/**', 'PATCH', '后台会员状态维护', 1),
     ('退款查询', 'refund:read', '/api/admin/refunds/**', 'GET', '后台退款查询', 1),
-    ('退款审核', 'refund:write', '/api/admin/refunds/**', 'PATCH', '后台退款审核', 1)
+    ('退款审核', 'refund:write', '/api/admin/refunds/**', 'PATCH', '后台退款审核', 1),
+    ('秒杀活动查询', 'seckill:read', '/api/admin/seckill/**', 'GET', '查询秒杀活动', 1),
+    ('秒杀活动管理', 'seckill:write', '/api/admin/seckill/**', 'ALL', '维护秒杀活动', 1)
 ON DUPLICATE KEY UPDATE
     name = VALUES(name),
     url_pattern = VALUES(url_pattern),

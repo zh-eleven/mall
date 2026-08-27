@@ -1,0 +1,129 @@
+@baseUrl = http://localhost:8080
+
+### 修改为数据库中有可用库存的SKU
+@skuId = 3
+
+### 1. 添加秒杀SKU
+POST {{baseUrl}}/api/admin/seckill/activities/{{seckillActivityId}}/skus
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "skuId": {{skuId}},
+  "seckillPrice": 0.01,
+  "totalStock": 1,
+  "perUserLimit": 1
+}
+
+> {%
+    client.test("添加秒杀SKU成功", function () {
+        client.assert(response.status === 200,
+            "HTTP状态码应为200，实际为："
+            + response.status);
+
+        client.assert(response.body.code === 200,
+            "业务码应为200，实际为："
+            + response.body.code);
+
+        client.assert(response.body.data.availableStock === 1,
+            "剩余秒杀库存应为1");
+
+        client.assert(response.body.data.perUserLimit === 1,
+            "每人限购数量应为1");
+    });
+
+    if (response.body.data
+        && response.body.data.id) {
+        client.global.set(
+            "seckillSkuId",
+            response.body.data.id
+        );
+    }
+%}
+
+### 2. 重复添加相同SKU
+POST {{baseUrl}}/api/admin/seckill/activities/{{seckillActivityId}}/skus
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "skuId": {{skuId}},
+  "seckillPrice": 0.01,
+  "totalStock": 1,
+  "perUserLimit": 1
+}
+
+> {%
+    client.test("拒绝重复添加SKU", function () {
+        client.assert(response.status === 409,
+            "HTTP状态码应为409");
+
+        client.assert(response.body.code === 40938,
+            "业务码应为40938");
+    });
+%}
+
+### 3. 查询活动中的秒杀SKU
+GET {{baseUrl}}/api/admin/seckill/activities/{{seckillActivityId}}/skus
+Authorization: Bearer {{adminToken}}
+
+> {%
+    client.test("秒杀SKU列表查询成功", function () {
+        client.assert(response.status === 200,
+            "HTTP状态码应为200");
+
+        client.assert(Array.isArray(response.body.data),
+            "响应数据应为数组");
+
+        client.assert(response.body.data.length > 0,
+            "活动中应该至少存在一个SKU");
+
+        const seckillSkuId =
+            client.global.get("seckillSkuId");
+
+        const exists = response.body.data.some(
+            item =>
+                Number(item.id)
+                === Number(seckillSkuId)
+        );
+
+        client.assert(exists,
+            "列表中没有刚添加的秒杀SKU");
+    });
+%}
+
+
+### 4. 启用秒杀活动
+PATCH {{baseUrl}}/api/admin/seckill/activities/{{seckillActivityId}}/enable
+Authorization: Bearer {{adminToken}}
+
+> {%
+    client.test("秒杀活动启用成功", function () {
+        client.assert(response.status === 200,
+            "HTTP状态码应为200，实际为："
+            + response.status);
+
+        client.assert(response.body.code === 200,
+            "业务码应为200，实际为："
+            + response.body.code);
+
+        client.assert(response.body.data.status === 1,
+            "启用后活动状态应为1");
+    });
+%}
+
+### 5. 重复启用活动
+PATCH {{baseUrl}}/api/admin/seckill/activities/{{seckillActivityId}}/enable
+Authorization: Bearer {{adminToken}}
+
+> {%
+    client.test("拒绝重复启用活动", function () {
+        client.assert(response.status === 409,
+            "HTTP状态码应为409，实际为："
+            + response.status);
+
+        client.assert(response.body.code === 40937,
+            "业务码应为40937，实际为："
+            + response.body.code);
+    });
+%}

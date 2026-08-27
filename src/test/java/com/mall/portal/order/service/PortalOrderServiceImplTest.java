@@ -730,6 +730,11 @@ class PortalOrderServiceImplTest {
                 2
         )).thenReturn(1);
 
+        when(productMapper.decreaseStock(
+                20L,
+                2
+        )).thenReturn(1);
+
         var result = orderService.pay(
                 4L,
                 500L
@@ -748,6 +753,11 @@ class PortalOrderServiceImplTest {
 
         verify(skuStockMapper).deductLockedStock(
                 10L,
+                2
+        );
+
+        verify(productMapper).decreaseStock(
+                20L,
                 2
         );
     }

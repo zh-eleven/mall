@@ -79,6 +79,7 @@ class AdminOrderRefundServiceImplTest {
                 .thenReturn(List.of(item(10L, 2), item(11L, 1)));
         when(skuStockMapper.restoreStock(10L, 2)).thenReturn(1);
         when(skuStockMapper.restoreStock(11L, 1)).thenReturn(1);
+        when(productMapper.increaseStock(20L, 3)).thenReturn(1);
         when(refundMapper.completeApplyingRefund(
                 900L, 0, 1, "审核通过"
         )).thenReturn(1);
@@ -90,6 +91,7 @@ class AdminOrderRefundServiceImplTest {
         verify(orderMapper).markRefunded(500L, 5, 6);
         verify(skuStockMapper).restoreStock(10L, 2);
         verify(skuStockMapper).restoreStock(11L, 1);
+        verify(productMapper).increaseStock(20L, 3);
         verify(refundMapper).completeApplyingRefund(
                 900L, 0, 1, "审核通过"
         );
@@ -167,6 +169,7 @@ class AdminOrderRefundServiceImplTest {
         when(orderItemMapper.selectList(any()))
                 .thenReturn(List.of(item(10L, 2)));
         when(skuStockMapper.restoreStock(10L, 2)).thenReturn(1);
+        when(productMapper.increaseStock(20L, 2)).thenReturn(1);
         when(refundMapper.completeApplyingRefund(
                 900L, 0, 1, "审核通过"
         )).thenReturn(1);
@@ -181,6 +184,7 @@ class AdminOrderRefundServiceImplTest {
         }
 
         verify(skuStockMapper, times(1)).restoreStock(10L, 2);
+        verify(productMapper, times(1)).increaseStock(20L, 2);
         verify(refundMapper, times(1)).completeApplyingRefund(
                 900L, 0, 1, "审核通过"
         );
@@ -217,6 +221,8 @@ class AdminOrderRefundServiceImplTest {
         when(orderItemMapper.selectList(any()))
                 .thenReturn(List.of(item(10L, 2)));
         when(skuStockMapper.restoreStock(10L, 2))
+                .thenReturn(1);
+        when(productMapper.increaseStock(20L, 2))
                 .thenReturn(1);
         when(refundMapper.completeApplyingRefund(
                 900L, 0, 1, "审核通过"
@@ -334,6 +340,7 @@ class AdminOrderRefundServiceImplTest {
         OmsOrderItem item = new OmsOrderItem();
         item.setId(skuId + 1000);
         item.setOrderId(500L);
+        item.setProductId(20L);
         item.setSkuId(skuId);
         item.setQuantity(quantity);
         return item;

@@ -359,3 +359,90 @@ CREATE TABLE IF NOT EXISTS oms_order_refund (
     KEY idx_refund_member_status_time (member_id, status, create_time, id),
     KEY idx_refund_status_time (status, create_time, id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+CREATE TABLE IF NOT EXISTS sms_seckill_activity (
+    id BIGINT NOT NULL AUTO_INCREMENT,
+    name VARCHAR(100) NOT NULL,
+    start_time DATETIME NOT NULL,
+    end_time DATETIME NOT NULL,
+    status TINYINT NOT NULL DEFAULT 0 COMMENT '0未启用 1已启用 2已结束',
+    create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    KEY idx_status_time (status, start_time, end_time),
+    CONSTRAINT chk_activity_time CHECK (end_time > start_time),
+    CONSTRAINT chk_seckill_activity_status CHECK (status IN (0, 1, 2))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+CREATE TABLE IF NOT EXISTS sms_seckill_sku (
+    id BIGINT NOT NULL AUTO_INCREMENT,
+    activity_id BIGINT NOT NULL,
+    product_id BIGINT NOT NULL,
+    sku_id BIGINT NOT NULL,
+    seckill_price DECIMAL(10,2) NOT NULL,
+    total_stock INT UNSIGNED NOT NULL,
+    available_stock INT UNSIGNED NOT NULL,
+    per_user_limit INT UNSIGNED NOT NULL DEFAULT 1,
+    create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_activity_sku (activity_id, sku_id),
+    CONSTRAINT fk_seckill_activity FOREIGN KEY (activity_id)
+        REFERENCES sms_seckill_activity (id),
+    CONSTRAINT fk_seckill_product FOREIGN KEY (product_id)
+        REFERENCES pms_product (id),
+    CONSTRAINT fk_seckill_sku FOREIGN KEY (sku_id)
+        REFERENCES pms_sku_stock (id),
+    CONSTRAINT chk_seckill_stock CHECK (
+        total_stock > 0 AND available_stock <= total_stock
+    ),
+    CONSTRAINT chk_seckill_limit CHECK (
+        per_user_limit = 1
+    )
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+CREATE TABLE IF NOT EXISTS oms_seckill_order (
+    id BIGINT NOT NULL AUTO_INCREMENT,
+    request_id VARCHAR(64) NOT NULL,
+    order_id BIGINT NOT NULL,
+    activity_id BIGINT NOT NULL,
+    seckill_sku_id BIGINT NOT NULL,
+    member_id BIGINT NOT NULL,
+    quantity INT UNSIGNED NOT NULL DEFAULT 1,
+    create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_seckill_request (request_id, seckill_sku_id, member_id),
+    UNIQUE KEY uk_seckill_order (order_id),
+    UNIQUE KEY uk_seckill_member_sku (member_id, seckill_sku_id),
+    KEY idx_seckill_activity (activity_id),
+    CONSTRAINT fk_seckill_order_order FOREIGN KEY (order_id)
+        REFERENCES oms_order (id),
+    CONSTRAINT fk_seckill_order_activity FOREIGN KEY (activity_id)
+        REFERENCES sms_seckill_activity (id),
+    CONSTRAINT fk_seckill_order_sku FOREIGN KEY (seckill_sku_id)
+        REFERENCES sms_seckill_sku (id),
+    CONSTRAINT fk_seckill_order_member FOREIGN KEY (member_id)
+        REFERENCES ums_member (id),
+    CONSTRAINT chk_seckill_order_quantity CHECK (quantity = 1)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+CREATE TABLE IF NOT EXISTS oms_seckill_failure (
+    id BIGINT NOT NULL AUTO_INCREMENT,
+    request_id VARCHAR(64) NOT NULL,
+    seckill_sku_id BIGINT NOT NULL,
+    member_id BIGINT NOT NULL,
+    failure_reason VARCHAR(1000) NULL,
+    status TINYINT NOT NULL DEFAULT 0 COMMENT '0待补偿 1已补偿',
+    retry_count INT UNSIGNED NOT NULL DEFAULT 0,
+    last_retry_time DATETIME NULL,
+    create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_seckill_failure_request (request_id, seckill_sku_id, member_id),
+    KEY idx_seckill_failure_status_time (status, update_time, id),
+    CONSTRAINT fk_seckill_failure_sku FOREIGN KEY (seckill_sku_id)
+        REFERENCES sms_seckill_sku (id),
+    CONSTRAINT fk_seckill_failure_member FOREIGN KEY (member_id)
+        REFERENCES ums_member (id),
+    CONSTRAINT chk_seckill_failure_status CHECK (status IN (0, 1))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;

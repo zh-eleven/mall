@@ -411,6 +411,85 @@ public enum ErrorCode implements IErrorCode {
             40936,
             "退款申请已被其他操作处理",
             HttpStatus.CONFLICT
+    ),
+    SECKILL_ACTIVITY_NOT_FOUND(
+            40416,
+            "秒杀活动不存在",
+            HttpStatus.NOT_FOUND
+    ),
+
+    SECKILL_ACTIVITY_TIME_INVALID(
+            40019,
+            "秒杀活动时间无效",
+            HttpStatus.BAD_REQUEST
+    ),
+    SECKILL_PRICE_INVALID(
+        40020,
+                "秒杀价格必须大于0且不能高于SKU价格",
+        HttpStatus.BAD_REQUEST
+        ),
+
+    SECKILL_STOCK_INVALID(
+        40021,
+                "秒杀库存配置无效",
+        HttpStatus.BAD_REQUEST
+        ),
+
+    SECKILL_ACTIVITY_STATUS_INVALID(
+        40937,
+                "当前秒杀活动状态不允许修改",
+        HttpStatus.CONFLICT
+        ),
+
+    SECKILL_SKU_ALREADY_EXISTS(
+        40938,
+                "该SKU已加入当前秒杀活动",
+        HttpStatus.CONFLICT
+        ),
+    SECKILL_ACTIVITY_EMPTY(
+            40939,
+            "秒杀活动至少需要一个商品",
+            HttpStatus.CONFLICT
+    ),
+
+    SECKILL_PRODUCT_UNAVAILABLE(
+            40940,
+            "秒杀商品未上架或已经失效",
+            HttpStatus.CONFLICT
+    ),
+    SECKILL_SKU_NOT_FOUND(
+            40417,
+            "秒杀商品不存在",
+            HttpStatus.NOT_FOUND
+    ),
+    SECKILL_NOT_STARTED(
+            40941,
+            "秒杀活动尚未开始",
+            HttpStatus.CONFLICT
+    ),
+
+    SECKILL_ENDED(
+            40942,
+            "秒杀活动已经结束",
+            HttpStatus.CONFLICT
+    ),
+
+    SECKILL_SOLD_OUT(
+            40943,
+            "秒杀商品已售罄",
+            HttpStatus.CONFLICT
+    ),
+
+    SECKILL_LIMIT_EXCEEDED(
+            40944,
+            "不能重复购买该秒杀商品",
+            HttpStatus.CONFLICT
+    ),
+
+    SECKILL_DATA_UNAVAILABLE(
+            50301,
+            "秒杀服务暂时不可用",
+            HttpStatus.SERVICE_UNAVAILABLE
     );
 
 

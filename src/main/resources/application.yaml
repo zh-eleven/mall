@@ -77,3 +77,12 @@ management:
         include:
           - health
           - metrics
+
+seckill:
+  compensation-scan-delay: 60000
+  compensation-batch-size: 100
+  reservation-stale-millis: 120000
+  reservation-sku-batch-size: 1000
+  reservation-request-batch-size: 100
+  activity-close-grace-millis: 300000
+  activity-close-batch-size: 100

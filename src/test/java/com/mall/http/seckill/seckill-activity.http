@@ -1,0 +1,163 @@
+@baseUrl = http://localhost:8080
+@adminUsername = admin
+@adminPassword = 123456
+
+### 1. 管理员登录
+POST {{baseUrl}}/api/admin/auth/login
+Content-Type: application/json
+
+{
+  "username": "{{adminUsername}}",
+  "password": "{{adminPassword}}"
+}
+
+> {%
+    client.test("管理员登录成功", function () {
+        client.assert(response.status === 200,
+            "HTTP状态码应为200");
+        client.assert(response.body.data
+            && response.body.data.token,
+            "响应中缺少Token");
+    });
+
+    if (response.body.data
+        && response.body.data.token) {
+        client.global.set(
+            "adminToken",
+            response.body.data.token
+        );
+    }
+%}
+
+### 2. 创建有效活动
+< {%
+    function formatLocal(date) {
+        const pad = value =>
+            String(value).padStart(2, "0");
+
+        return date.getFullYear()
+            + "-" + pad(date.getMonth() + 1)
+            + "-" + pad(date.getDate())
+            + "T" + pad(date.getHours())
+            + ":" + pad(date.getMinutes())
+            + ":" + pad(date.getSeconds());
+    }
+
+    const now = Date.now();
+
+    request.variables.set(
+        "startTime",
+        formatLocal(
+            new Date(now + 60 * 60 * 1000)
+        )
+    );
+
+    request.variables.set(
+        "endTime",
+        formatLocal(
+            new Date(now + 2 * 60 * 60 * 1000)
+        )
+    );
+%}
+POST {{baseUrl}}/api/admin/seckill/activities
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "name": "限时手机秒杀",
+  "startTime": "{{startTime}}",
+  "endTime": "{{endTime}}"
+}
+
+> {%
+    client.test("秒杀活动创建成功", function () {
+        client.assert(response.status === 200,
+            "HTTP状态码应为200");
+
+        client.assert(response.body.code === 200,
+            "业务码应为200");
+
+        client.assert(response.body.data.status === 0,
+            "新活动应该处于未启用状态");
+    });
+
+    if (response.body.data
+        && response.body.data.id) {
+        client.global.set(
+            "seckillActivityId",
+            response.body.data.id
+        );
+    }
+%}
+
+### 3. 查询刚创建的活动
+GET {{baseUrl}}/api/admin/seckill/activities/{{seckillActivityId}}
+Authorization: Bearer {{adminToken}}
+
+> {%
+    client.test("秒杀活动查询成功", function () {
+        client.assert(response.status === 200,
+            "HTTP状态码应为200");
+
+        client.assert(
+            Number(response.body.data.id)
+            === Number(
+                client.global.get("seckillActivityId")
+            ),
+            "活动ID不一致"
+        );
+
+        client.assert(response.body.data.status === 0,
+            "活动应该处于未启用状态");
+    });
+%}
+
+### 4. 结束时间早于开始时间
+< {%
+    function formatLocal(date) {
+        const pad = value =>
+            String(value).padStart(2, "0");
+
+        return date.getFullYear()
+            + "-" + pad(date.getMonth() + 1)
+            + "-" + pad(date.getDate())
+            + "T" + pad(date.getHours())
+            + ":" + pad(date.getMinutes())
+            + ":" + pad(date.getSeconds());
+    }
+
+    const now = Date.now();
+
+    request.variables.set(
+        "invalidStartTime",
+        formatLocal(
+            new Date(now + 3 * 60 * 60 * 1000)
+        )
+    );
+
+    request.variables.set(
+        "invalidEndTime",
+        formatLocal(
+            new Date(now + 2 * 60 * 60 * 1000)
+        )
+    );
+%}
+POST {{baseUrl}}/api/admin/seckill/activities
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "name": "无效活动",
+  "startTime": "{{invalidStartTime}}",
+  "endTime": "{{invalidEndTime}}"
+}
+
+> {%
+    client.test("拒绝无效活动时间", function () {
+        client.assert(response.status === 400,
+            "HTTP状态码应为400");
+
+        client.assert(response.body.code === 40019,
+            "业务码应为40019");
+    });
+%}
